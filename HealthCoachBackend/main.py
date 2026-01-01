@@ -42,6 +42,12 @@ def root():
 def chat(req: ChatRequest):
     print("\n================= CHAT =================")
     print("📝 MESSAGE :", req.message)
+    print("📦 SNAPSHOT REÇU PAR LE BACKEND")
+    print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
+
+    print("   📏 Distance (km) :", req.snapshot.totals.distance_km)
+    print("   ⏱️ Durée (min)   :", req.snapshot.totals.duration_min)
+    print("   📆 Séances       :", req.snapshot.totals.sessions)
 
     # ======================================================
     # 🔴 COMPARAISON FINALE — PRIORITÉ ABSOLUE

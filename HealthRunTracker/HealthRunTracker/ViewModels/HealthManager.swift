@@ -932,7 +932,7 @@ extension HealthManager {
         let datePredicate = HKQuery.predicateForSamples(
             withStart: startDate,
             end: endInclusive,
-            options: .strictStartDate
+            options: [] // ❗️ IMPORTANT : PAS strictStartDate
         )
 
         let runningPredicate = HKQuery.predicateForWorkouts(with: .running)
@@ -949,8 +949,15 @@ extension HealthManager {
         ) { _, samples, error in
 
             guard let workouts = samples as? [HKWorkout], error == nil else {
+                print("❌ fetchRuns error:", error?.localizedDescription ?? "unknown")
                 completion([])
                 return
+            }
+
+            print("🏃‍♂️ fetchRuns → \(workouts.count) workouts")
+            for w in workouts {
+                let km = (w.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000
+                print("   •", w.startDate, String(format: "%.2f km", km))
             }
 
             let formatter = DateFormatter()
@@ -981,7 +988,6 @@ extension HealthManager {
 
         healthStore.execute(query)
     }
-
 }
 
 extension HealthManager {
@@ -993,6 +999,10 @@ extension HealthManager {
     ) {
 
         fetchRuns(from: startDate, to: endDate) { runs in
+
+            print("📦 SNAPSHOT BUILD")
+            print("   Runs count:", runs.count)
+            print("   Total km:", runs.map(\.distanceKm).reduce(0, +))
 
             let totals = WeeklyTotals(
                 distanceKm: runs.map(\.distanceKm).reduce(0, +),
@@ -1019,16 +1029,15 @@ extension HealthManager {
                 )
             }
 
-            let dateFormatter = DateFormatter()
-            dateFormatter.calendar = Calendar(identifier: .gregorian)
-            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-            dateFormatter.dateFormat = "yyyy-MM-dd"
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy-MM-dd"
 
             let period = PeriodSnapshot(
-                start: dateFormatter.string(from: startDate),
-                end: dateFormatter.string(from: endDate)
+                start: formatter.string(from: startDate),
+                end: formatter.string(from: endDate)
             )
-
 
             let snapshot = WeeklySnapshot(
                 weekLabel: "Custom period",
