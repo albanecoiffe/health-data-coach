@@ -11,8 +11,9 @@ from agent import (
     summary_response,
 )
 import re
-from services.periods import period_to_dates, normalize
-from services.comparisons import compare_snapshots
+from services.periods import period_to_dates, normalize, resolve_period
+from services.comparisons import compare_snapshots, resolve_intent
+from services.router import snapshot_matches
 
 from datetime import date, timedelta
 import calendar
@@ -56,6 +57,7 @@ def root():
 # ======================================================
 @app.post("/chat")
 def chat(req: ChatRequest):
+    intent = resolve_intent(req.message)
     print("\n================= CHAT =================")
     print("📝 MESSAGE :", req.message)
     print("📦 SNAPSHOT REÇU PAR LE BACKEND")

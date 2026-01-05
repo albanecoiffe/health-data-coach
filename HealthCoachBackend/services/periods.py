@@ -64,3 +64,26 @@ def normalize(text: str) -> str:
     text = text.replace("–", "-").replace("—", "-")
 
     return text
+
+
+def resolve_period(message: str, snapshot_period: tuple[str, str]):
+    msg = normalize(message)
+    today = date.today()
+
+    # === SEMAINES ===
+    if "semaine derniere" in msg or "semaine precedente" in msg:
+        return period_to_dates("PREVIOUS_WEEK")
+
+    if "cette semaine" in msg or "semaine actuelle" in msg:
+        return period_to_dates("CURRENT_WEEK")
+
+    # === MOIS ===
+    if "mois dernier" in msg:
+        return period_to_dates("PREVIOUS_MONTH")
+
+    if "ce mois" in msg or "ce mois ci" in msg:
+        return period_to_dates("CURRENT_MONTH")
+
+    # === FALLBACK → période courante
+    start, end = snapshot_period
+    return date.fromisoformat(start), date.fromisoformat(end)
