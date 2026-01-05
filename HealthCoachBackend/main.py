@@ -109,7 +109,18 @@ def chat(req: ChatRequest):
     msg = normalize(req.message)
 
     # 🛡️ VERROU BACKEND — DEMANDE DE BILAN
-    if any(k in msg for k in ["bilan", "resume", "résumé", "recap", "synthese"]):
+    if any(
+        k in msg
+        for k in [
+            "bilan",
+            "resume",
+            "résumé",
+            "recap",
+            "synthese",
+            "stat",
+            "statistiques",
+        ]
+    ):
         decision = {"type": "SUMMARY"}
         print("🛡️ OVERRIDE BACKEND → SUMMARY")
 
@@ -139,18 +150,6 @@ def chat(req: ChatRequest):
     # 🛡️ VERROU BACKEND — MOIS NOMMÉ (octobre, mars, etc.)
     msg = normalize(req.message)
 
-    # 🛡️ VERROU BACKEND — RÉSUMÉ DE SEMAINE
-    if (
-        any(k in msg for k in ["resume", "bilan", "synthese", "stat"])
-        and "semaine" in msg
-    ):
-        decision = {
-            "type": "ANSWER_NOW",
-            "answer_mode": "FACTUAL",
-            "metric": "DISTANCE",  # ou None si tu veux un résumé multi-métriques plus tard
-        }
-        print("🛡️ OVERRIDE BACKEND → résumé de semaine détecté")
-
     # 🛡️ VERROU BACKEND — MOIS NOMMÉ (mot entier uniquement)
     for month_name, month_num in MONTHS.items():
         pattern = rf"\b{month_name}\b"
@@ -165,8 +164,6 @@ def chat(req: ChatRequest):
             break
 
     # 🛡️ VERROU BACKEND — semaine précédente = REQUEST_WEEK
-    msg = normalize(req.message)
-
     if decision.get("type") != "COMPARE_PERIODS":
         if any(
             k in msg
