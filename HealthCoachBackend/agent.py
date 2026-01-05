@@ -265,9 +265,9 @@ par exemple les mots :
 
 ALORS tu DOIS retourner EXACTEMENT :
 
-{
+{{
         "type": "SUMMARY"
-}
+}}
 
 RÈGLES ABSOLUES :
 - Tu ne retournes PAS de metric
@@ -481,7 +481,6 @@ def summary_response(snapshot) -> dict:
             "reply": f"Aucune séance enregistrée sur la période du {start} au {end}."
         }
 
-    # Totaux
     distance = round(snapshot.totals.distance_km, 1)
     duration_min = round(snapshot.totals.duration_min)
     hours = duration_min // 60
@@ -489,32 +488,39 @@ def summary_response(snapshot) -> dict:
     sessions = snapshot.totals.sessions
     elevation = round(snapshot.totals.elevation_m)
 
-    # Zones cardiaques (en minutes)
-    zones = snapshot.zones_percent or {}
+    # ❤️ Zones cardiaques
     zones_text = []
-    for z in ["z1", "z2", "z3", "z4", "z5"]:
-        if z in zones:
-            zones_text.append(f"{z.upper()} : {round(zones[z])}%")
+    zones = getattr(snapshot, "zones_percent", None)
+
+    if isinstance(zones, dict) and zones:
+        for z in ["z1", "z2", "z3", "z4", "z5"]:
+            val = zones.get(z)
+            if isinstance(val, (int, float)) and val > 0:
+                zones_text.append(f"{z.upper()} : {round(val * 100)}%")
 
     zones_str = ", ".join(zones_text) if zones_text else "non disponibles"
 
-    # Plus grosse sortie
-    longest = max(
-        snapshot.daily_runs,
-        key=lambda r: r.distance_km,
-        default=None,
-    )
+    # 🏅 Plus longue sortie
+    longest = getattr(snapshot, "longest_run_km", None)
 
-    longest_str = f"{round(longest.distance_km, 1)} km" if longest else "non disponible"
+    longest_str = (
+        f"{round(longest, 1)} km"
+        if isinstance(longest, (int, float)) and longest > 0
+        else "non disponible"
+    )
 
     return {
         "reply": (
-            f"📊 **Bilan de la période {start} → {end}**\n\n"
-            f"🏃 Distance totale : **{distance} km**\n"
-            f"⏱️ Temps total : **{hours}h{minutes:02d}**\n"
-            f"📆 Séances : **{sessions}**\n"
-            f"⛰️ D+ : **{elevation} m**\n\n"
+            f"📊 Bilan de la période {start} → {end}\n\n"
+            f"🏃 Distance totale : {distance} km\n"
+            f"⏱️ Temps total : {hours}h{minutes:02d}\n"
+            f"📆 Séances : {sessions}\n"
+            f"⛰️ D+ : {elevation} m\n\n"
             f"❤️ Répartition cardiaque : {zones_str}\n"
-            f"🏅 Plus longue sortie : **{longest_str}**"
+            f"🏅 Plus longue sortie : {longest_str}"
         )
     }
+
+
+def get_distance(run):
+    return getattr(run, "distance_km", None) or getattr(run, "distanceKm", None) or 0

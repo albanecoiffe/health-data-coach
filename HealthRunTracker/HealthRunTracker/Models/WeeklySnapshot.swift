@@ -42,4 +42,6 @@ struct WeeklySnapshot: Codable {
     let dailyRuns: [DailyRunSnapshot]
     let trainingLoad: TrainingLoad?
     let comparisonPrevWeek: [String: Double]?
+    let longestRunKm: Double?
+
 }

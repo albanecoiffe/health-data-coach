@@ -355,9 +355,39 @@ def chat(req: ChatRequest):
             },
         }
     # ======================================================
-    # 🟣 SUMMARY
+
+    # 🟡 SUMMARY AVEC PÉRIODE RELATIVE
     # ======================================================
+    print("DAILY RUNS COUNT:", len(req.snapshot.daily_runs))
+    print("RAW SNAPSHOT KEYS:", req.snapshot.model_dump().keys())
+    print("DAILY RUNS:", len(req.snapshot.daily_runs))
+
     if decision_type == "SUMMARY":
+        msg = normalize(req.message)
+
+        # Cas : ce mois-ci
+        if "ce mois" in msg or "ce mois ci" in msg:
+            today = date.today()
+            start = date(today.year, today.month, 1)
+            end = date(
+                today.year,
+                today.month,
+                calendar.monthrange(today.year, today.month)[1],
+            )
+
+            # Snapshot déjà chargé ?
+            if (
+                req.snapshot.period.start == start.isoformat()
+                and req.snapshot.period.end == end.isoformat()
+            ):
+                return summary_response(req.snapshot)
+
+            return {
+                "type": "REQUEST_SNAPSHOT",
+                "period": {"start": start.isoformat(), "end": end.isoformat()},
+            }
+
+        # Sinon → summary sur la période courante
         return summary_response(req.snapshot)
 
     # ======================================================

@@ -69,6 +69,7 @@ final class HealthManager: ObservableObject {
     // MARK: - Types internes
 
     struct DailyRunData: Identifiable {
+        let hkWorkout: HKWorkout
         let id = UUID()
         let date: Date
         let distanceKm: Double
@@ -181,6 +182,7 @@ final class HealthManager: ObservableObject {
                     let zones = results.first { $0.dayLabel == label }
 
                     return DailyRunData(
+                        hkWorkout: workout,
                         date: workout.startDate,
                         distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
                         durationMin: workout.duration / 60,
@@ -194,6 +196,7 @@ final class HealthManager: ObservableObject {
                         z4: zones?.z4 ?? 0,
                         z5: zones?.z5 ?? 0
                     )
+
                 }
 
                 self.weeklyData = data
@@ -552,6 +555,7 @@ extension HealthManager {
                     .averageQuantity()?
                     .doubleValue(for: HKUnit(from: "count/min")) ?? 0
                 return DailyRunData(
+                    hkWorkout: workout,
                     date: workout.startDate,
                     distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
                     durationMin: workout.duration / 60,
@@ -559,14 +563,9 @@ extension HealthManager {
                         .doubleValue(for: .meter()) ?? 0,
                     dayLabel: formatter.string(from: workout.startDate),
                     averageHeartRate: avgHR,
-
-                    // Ajout des zones manquantes
-                    z1: 0,
-                    z2: 0,
-                    z3: 0,
-                    z4: 0,
-                    z5: 0
+                    z1: 0, z2: 0, z3: 0, z4: 0, z5: 0
                 )
+
 
             }
 
@@ -893,6 +892,9 @@ extension HealthManager {
                 z5: $0.z5
             )
         }
+        let longestRunKm = weeklyData
+            .map(\.distanceKm)
+            .max()
 
         return WeeklySnapshot(
             weekLabel: "Semaine courante",
@@ -905,7 +907,8 @@ extension HealthManager {
                 load28d: twentyEightDayLoad,
                 ratio: loadRatio
             ),
-            comparisonPrevWeek: nil
+            comparisonPrevWeek: nil,
+            longestRunKm: longestRunDistance
         )
     }
 
@@ -932,7 +935,7 @@ extension HealthManager {
         let datePredicate = HKQuery.predicateForSamples(
             withStart: startDate,
             end: endInclusive,
-            options: [] // ❗️ IMPORTANT : PAS strictStartDate
+            options: []
         )
 
         let runningPredicate = HKQuery.predicateForWorkouts(with: .running)
@@ -946,110 +949,218 @@ extension HealthManager {
             predicate: predicate,
             limit: HKObjectQueryNoLimit,
             sortDescriptors: nil
-        ) { _, samples, error in
+        ) { [weak self] _, samples, error in
 
-            guard let workouts = samples as? [HKWorkout], error == nil else {
-                print("❌ fetchRuns error:", error?.localizedDescription ?? "unknown")
+            guard let self = self,
+                  let workouts = samples as? [HKWorkout],
+                  error == nil else {
                 completion([])
                 return
-            }
-
-            print("🏃‍♂️ fetchRuns → \(workouts.count) workouts")
-            for w in workouts {
-                let km = (w.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000
-                print("   •", w.startDate, String(format: "%.2f km", km))
             }
 
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "fr_FR")
             formatter.dateFormat = "yyyy-MM-dd"
 
-            let runs = workouts.map { workout -> DailyRunData in
-                let avgHR = workout.statistics(
-                    for: HKQuantityType.quantityType(forIdentifier: .heartRate)!
-                )?
-                .averageQuantity()?
-                .doubleValue(for: HKUnit(from: "count/min")) ?? 0
+            let group = DispatchGroup()
+                var results: [DailyRunData] = []
 
-                return DailyRunData(
-                    date: workout.startDate,
-                    distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
-                    durationMin: workout.duration / 60,
-                    elevationGainM: (workout.metadata?["HKElevationAscended"] as? HKQuantity)?
-                        .doubleValue(for: .meter()) ?? 0,
-                    dayLabel: formatter.string(from: workout.startDate),
-                    averageHeartRate: avgHR,
-                    z1: 0, z2: 0, z3: 0, z4: 0, z5: 0
-                )
+                for workout in workouts {
+                    group.enter()
+
+                    self.computeZonesForWorkout(workout) { zones in
+
+                        let avgHR = workout.statistics(
+                            for: HKQuantityType.quantityType(forIdentifier: .heartRate)!
+                        )?
+                        .averageQuantity()?
+                        .doubleValue(for: HKUnit(from: "count/min")) ?? 0
+
+                        let run = DailyRunData(
+                            hkWorkout: workout,
+                            date: workout.startDate,
+                            distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
+                            durationMin: workout.duration / 60,
+                            elevationGainM: (workout.metadata?["HKElevationAscended"] as? HKQuantity)?
+                                .doubleValue(for: .meter()) ?? 0,
+                            dayLabel: formatter.string(from: workout.startDate),
+                            averageHeartRate: avgHR,
+                            z1: zones?.z1 ?? 0,
+                            z2: zones?.z2 ?? 0,
+                            z3: zones?.z3 ?? 0,
+                            z4: zones?.z4 ?? 0,
+                            z5: zones?.z5 ?? 0
+                        )
+
+                        results.append(run)
+                        group.leave()
+                    }
+                }
+
+                group.notify(queue: .main) {
+                    completion(results)
+                }
             }
-
-            completion(runs)
-        }
 
         healthStore.execute(query)
     }
+
 }
 
 extension HealthManager {
-
+    
     func makeSnapshot(
         from startDate: Date,
         to endDate: Date,
         completion: @escaping (WeeklySnapshot) -> Void
     ) {
-
+        
         fetchRuns(from: startDate, to: endDate) { runs in
-
+            
             print("📦 SNAPSHOT BUILD")
             print("   Runs count:", runs.count)
             print("   Total km:", runs.map(\.distanceKm).reduce(0, +))
-
-            let totals = WeeklyTotals(
-                distanceKm: runs.map(\.distanceKm).reduce(0, +),
-                durationMin: runs.map(\.durationMin).reduce(0, +),
-                sessions: runs.count,
-                elevationM: runs.map(\.elevationGainM).reduce(0, +),
-                avgHr: runs.isEmpty
-                    ? nil
-                    : runs.map(\.averageHeartRate).reduce(0, +) / Double(runs.count)
-            )
-
-            let dailyRuns = runs.map {
-                DailyRunSnapshot(
-                    date: ISO8601DateFormatter().string(from: $0.date),
-                    distanceKm: $0.distanceKm,
-                    durationMin: $0.durationMin,
-                    elevationM: $0.elevationGainM,
-                    avgHr: $0.averageHeartRate,
-                    z1: $0.z1,
-                    z2: $0.z2,
-                    z3: $0.z3,
-                    z4: $0.z4,
-                    z5: $0.z5
+            
+            // 🔴 SÉCURITÉ : aucune séance
+            guard !runs.isEmpty else {
+                
+                let formatter = DateFormatter()
+                formatter.calendar = Calendar(identifier: .gregorian)
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.dateFormat = "yyyy-MM-dd"
+                
+                let emptySnapshot = WeeklySnapshot(
+                    weekLabel: "Custom period",
+                    period: PeriodSnapshot(
+                        start: formatter.string(from: startDate),
+                        end: formatter.string(from: endDate)
+                    ),
+                    totals: WeeklyTotals(
+                        distanceKm: 0,
+                        durationMin: 0,
+                        sessions: 0,
+                        elevationM: 0,
+                        avgHr: nil
+                    ),
+                    zonesPercent: [:],
+                    dailyRuns: [],
+                    trainingLoad: nil,
+                    comparisonPrevWeek: nil,
+                    longestRunKm: nil
                 )
+                
+                completion(emptySnapshot)
+                return
             }
-
-            let formatter = DateFormatter()
-            formatter.calendar = Calendar(identifier: .gregorian)
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.dateFormat = "yyyy-MM-dd"
-
-            let period = PeriodSnapshot(
-                start: formatter.string(from: startDate),
-                end: formatter.string(from: endDate)
-            )
-
-            let snapshot = WeeklySnapshot(
-                weekLabel: "Custom period",
-                period: period,
-                totals: totals,
-                zonesPercent: [:],
-                dailyRuns: dailyRuns,
-                trainingLoad: nil,
-                comparisonPrevWeek: nil
-            )
-
-            completion(snapshot)
+            
+            // ======================================================
+            // 1️⃣ CALCUL DES ZONES PAR SÉANCE
+            // ======================================================
+            let group = DispatchGroup()
+            var enrichedRuns: [DailyRunData] = []
+            
+            for run in runs {
+                group.enter()
+                
+                // ⚠️ IMPORTANT : il faut lier DailyRunData ↔ HKWorkout
+                // Ici on suppose que tu peux retrouver le workout depuis la date
+                // (comme dans fetchRuns, sinon il faut l’ajouter à DailyRunData)
+                self.computeZonesForWorkout(run.hkWorkout) { breakdown in
+                    
+                    let enriched = DailyRunData(
+                        hkWorkout: run.hkWorkout,
+                        date: run.date,
+                        distanceKm: run.distanceKm,
+                        durationMin: run.durationMin,
+                        elevationGainM: run.elevationGainM,
+                        dayLabel: run.dayLabel,
+                        averageHeartRate: run.averageHeartRate,
+                        z1: breakdown?.z1 ?? 0,
+                        z2: breakdown?.z2 ?? 0,
+                        z3: breakdown?.z3 ?? 0,
+                        z4: breakdown?.z4 ?? 0,
+                        z5: breakdown?.z5 ?? 0
+                    )
+                    
+                    enrichedRuns.append(enriched)
+                    group.leave()
+                }
+            }
+            
+            // ======================================================
+            // 2️⃣ CONSTRUCTION DU SNAPSHOT FINAL
+            // ======================================================
+            group.notify(queue: .main) {
+                
+                let totals = WeeklyTotals(
+                    distanceKm: enrichedRuns.map(\.distanceKm).reduce(0, +),
+                    durationMin: enrichedRuns.map(\.durationMin).reduce(0, +),
+                    sessions: enrichedRuns.count,
+                    elevationM: enrichedRuns.map(\.elevationGainM).reduce(0, +),
+                    avgHr: enrichedRuns.map(\.averageHeartRate).reduce(0, +) / Double(enrichedRuns.count)
+                )
+                
+                let dailyRuns = enrichedRuns.map {
+                    DailyRunSnapshot(
+                        date: ISO8601DateFormatter().string(from: $0.date),
+                        distanceKm: $0.distanceKm,
+                        durationMin: $0.durationMin,
+                        elevationM: $0.elevationGainM,
+                        avgHr: $0.averageHeartRate,
+                        z1: $0.z1,
+                        z2: $0.z2,
+                        z3: $0.z3,
+                        z4: $0.z4,
+                        z5: $0.z5
+                    )
+                }
+                
+                let formatter = DateFormatter()
+                formatter.calendar = Calendar(identifier: .gregorian)
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.dateFormat = "yyyy-MM-dd"
+                
+                let period = PeriodSnapshot(
+                    start: formatter.string(from: startDate),
+                    end: formatter.string(from: endDate)
+                )
+                
+                let zonesPercent = self.computeZonesPercent(from: enrichedRuns)
+                
+                let longestRun = enrichedRuns.max(by: { $0.distanceKm < $1.distanceKm })
+                
+                let snapshot = WeeklySnapshot(
+                    weekLabel: "Custom period",
+                    period: period,
+                    totals: totals,
+                    zonesPercent: zonesPercent,
+                    dailyRuns: dailyRuns,
+                    trainingLoad: nil,
+                    comparisonPrevWeek: nil,
+                    longestRunKm: longestRun?.distanceKm
+                )
+                
+                completion(snapshot)
+            }
         }
     }
+    func computeZonesPercent(from runs: [DailyRunData]) -> [String: Double] {
+        let z1 = runs.map(\.z1).reduce(0, +)
+        let z2 = runs.map(\.z2).reduce(0, +)
+        let z3 = runs.map(\.z3).reduce(0, +)
+        let z4 = runs.map(\.z4).reduce(0, +)
+        let z5 = runs.map(\.z5).reduce(0, +)
+        
+        let total = z1 + z2 + z3 + z4 + z5
+        guard total > 0 else { return [:] }
+        
+        return [
+            "z1": z1 / total,
+            "z2": z2 / total,
+            "z3": z3 / total,
+            "z4": z4 / total,
+            "z5": z5 / total
+        ]
+    }
 }
+

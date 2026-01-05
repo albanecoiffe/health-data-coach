@@ -1,5 +1,6 @@
 from typing import Optional, Dict, List
 from pydantic import BaseModel
+from pydantic import Field
 
 
 class Period(BaseModel):
@@ -38,16 +39,25 @@ class WeeklySnapshot(BaseModel):
     week_label: str
     period: Period
     totals: WeeklyTotals
-    zones_percent: Dict[str, float]
-    daily_runs: List[DailyRun]
-    training_load: Optional[TrainingLoad] = None
-    comparison_prev_week: Optional[Dict[str, float]] = None
+    zones_percent: dict[str, float] = Field(default_factory=dict)
+    daily_runs: list[DailyRun] = Field(alias="dailyRuns")
+    training_load: TrainingLoad | None = None
+    comparison_prev_week: dict[str, float] | None = None
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class Snapshot(BaseModel):
     period: Period
     totals: WeeklyTotals
+    daily_runs: list[DailyRun] = Field(default_factory=list, alias="dailyRuns")
     training_load: Optional[TrainingLoad] = None
+    zones_percent: dict[str, float] | None = None
+    longest_run_km: float | None = None
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class SnapshotBatchPayload(BaseModel):
