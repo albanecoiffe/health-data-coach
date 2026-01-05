@@ -104,6 +104,30 @@ def chat(req: ChatRequest):
         req.message,
         (req.snapshot.period.start, req.snapshot.period.end),
     )
+    # 🛡️ VERROU BACKEND — COMPARAISON EXPLICITE (priorité absolue)
+    msg = normalize(req.message)
+    if any(
+        k in msg
+        for k in [
+            "difference entre",
+            "différence entre",
+            "comparaison",
+            "compare",
+            "comparé",
+            "comparaison entre",
+            "évolution entre",
+            "évolution par rapport à",
+        ]
+    ):
+        if "semaine" in msg and "precedent" in msg:
+            decision = {
+                "type": "COMPARE_PERIODS",
+                "metric": decision.get("metric") or "DISTANCE",
+                "left": "CURRENT_WEEK",
+                "right": "PREVIOUS_WEEK",
+            }
+            print("🛡️ OVERRIDE BACKEND → COMPARAISON SEMAINE")
+
     # 🛡️ VERROU BACKEND — MOIS NOMMÉ (octobre, mars, etc.)
     msg = normalize(req.message)
 
@@ -135,23 +159,23 @@ def chat(req: ChatRequest):
     # 🛡️ VERROU BACKEND — semaine précédente = REQUEST_WEEK
     msg = normalize(req.message)
 
-    if any(
-        k in msg
-        for k in [
-            "semaine précédente",
-            "semaine derniere",
-            "semaine dernière",
-            "la semaine d'avant",
-            "semaine d’avant",
-            "précédente",
-        ]
-    ):
-        decision = {
-            "type": "REQUEST_WEEK",
-            "offset": -1,
-            "metric": decision.get("metric") or "DISTANCE",
-        }
-        print("🛡️ OVERRIDE BACKEND → semaine précédente = REQUEST_WEEK (-1)")
+    if decision.get("type") != "COMPARE_PERIODS":
+        if any(
+            k in msg
+            for k in [
+                "semaine precedente",
+                "semaine derniere",
+                "la semaine d'avant",
+                "semaine d’avant",
+                "precedente",
+            ]
+        ):
+            decision = {
+                "type": "REQUEST_WEEK",
+                "offset": -1,
+                "metric": decision.get("metric") or "DISTANCE",
+            }
+            print("🛡️ OVERRIDE BACKEND → semaine précédente = REQUEST_WEEK (-1)")
 
     # 🛡️ VERROU BACKEND — cette semaine = FACTUAL
     if decision.get("type") == "ANSWER_NOW" and (
