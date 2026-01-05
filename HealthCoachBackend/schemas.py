@@ -44,6 +44,25 @@ class WeeklySnapshot(BaseModel):
     comparison_prev_week: Optional[Dict[str, float]] = None
 
 
+class Snapshot(BaseModel):
+    period: Period
+    totals: WeeklyTotals
+    training_load: Optional[TrainingLoad] = None
+
+
+class SnapshotBatchPayload(BaseModel):
+    left: Snapshot
+    right: Snapshot
+
+
 class ChatRequest(BaseModel):
     message: str
-    snapshot: WeeklySnapshot
+    snapshot: Snapshot
+
+    snapshots: Optional[SnapshotBatchPayload] = None
+    meta: Optional[Dict[str, str]] = None
+
+
+ChatRequest.model_rebuild()
+SnapshotBatchPayload.model_rebuild()
+Snapshot.model_rebuild()

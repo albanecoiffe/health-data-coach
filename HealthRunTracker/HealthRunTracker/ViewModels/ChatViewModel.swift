@@ -1,13 +1,22 @@
 import Foundation
 import Combine
 
-struct CoachResponse: Codable {
-    let reply: String
+struct SnapshotRange: Codable {
+    let start: String
+    let end: String
 }
+
+struct SnapshotBatchPayload: Codable {
+    let left: SnapshotRange
+    let right: SnapshotRange
+}
+
 struct CoachAPIResponse: Codable {
     let reply: String?
     let type: String?
     let period: PeriodPayload?
+    let snapshots: SnapshotBatchPayload?
+    let meta: [String: String]?
 }
 
 struct PeriodPayload: Codable {
@@ -45,85 +54,127 @@ class ChatViewModel: ObservableObject {
 
 
     func askPythonBot(_ message: String) async -> String? {
-        //NSLog("🔥 askPythonBot called with message: %@", message)
-
 
         guard let url = URL(string: "http://192.168.1.77:8000/chat") else {
             return "URL invalide."
         }
 
-        // Snapshot par défaut
-        let snapshot = healthManager.makeWeeklySnapshot()
+        let calendar = Calendar.current
+        let now = Date()
+        let interval = calendar.dateInterval(of: .weekOfYear, for: now)!
+        
+        // 🔑 ON ATTEND LE SNAPSHOT
+        return await withCheckedContinuation { continuation in
 
-        let payload = ChatRequest(
-            message: message,
-            snapshot: snapshot
-        )
+            healthManager.makeSnapshot(
+                from: interval.start,
+                to: interval.end
+            ) { snapshot in
 
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"   // ✅ CRUCIAL
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 30
+                Task {
+                    let payload = ChatRequest(
+                        message: message,
+                        snapshot: snapshot
+                    )
 
-        do {
-            let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
-            req.httpBody = try encoder.encode(payload)
-        } catch {
-            return "Erreur encodage JSON"
-        }
+                    do {
+                        var req = URLRequest(url: url)
+                        req.httpMethod = "POST"
+                        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        do {
-            let (data, response) = try await URLSession.shared.data(for: req)
+                        let encoder = JSONEncoder()
+                        encoder.keyEncodingStrategy = .convertToSnakeCase
+                        req.httpBody = try encoder.encode(payload)
 
-            guard let http = response as? HTTPURLResponse,
-                  (200...299).contains(http.statusCode) else {
-                return "Erreur serveur"
-            }
+                        let (data, response) = try await URLSession.shared.data(for: req)
 
-            let decoded = try JSONDecoder().decode(CoachAPIResponse.self, from: data)
-            //NSLog("🟣 RAW RESPONSE: %@", String(data: data, encoding: .utf8) ?? "nil")
-            //NSLog("🟣 DECODED TYPE: %@", decoded.type ?? "nil")
-            //NSLog(
-                //"🟣 DECODED PERIOD: %@ → %@",
-               // decoded.period?.start ?? "nil",
-               // decoded.period?.end ?? "nil"
-            //)
+                        guard let http = response as? HTTPURLResponse,
+                              (200...299).contains(http.statusCode) else {
+                            continuation.resume(returning: "Erreur serveur")
+                            return
+                        }
 
-            
-            // 🟢 Réponse normale
-            if let reply = decoded.reply {
-                return reply
-            }
+                        let decoded = try JSONDecoder().decode(CoachAPIResponse.self, from: data)
 
-            // 🟠 Demande d’un autre snapshot
-            if decoded.type == "REQUEST_SNAPSHOT",
-               let period = decoded.period {
+                        print("🟣 RAW:", String(data: data, encoding: .utf8) ?? "nil")
+                        print("🟣 reply:", decoded.reply ?? "nil")
+                        print("🟣 type:", decoded.type ?? "nil")
 
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
+                        // 🟢 Réponse finale
+                        if let reply = decoded.reply {
+                            continuation.resume(returning: reply)
+                            return
+                        }
 
-                guard
-                    let start = formatter.date(from: period.start),
-                    let end = formatter.date(from: period.end)
-                else {
-                    return "Erreur période"
+                        // 🟣 Demande SNAPSHOT BATCH (COMPARAISON)
+                        if decoded.type == "REQUEST_SNAPSHOT_BATCH",
+                           let batch = decoded.snapshots,
+                           let meta = decoded.meta {
+
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+
+                            guard
+                                let leftStart = formatter.date(from: batch.left.start),
+                                let leftEnd = formatter.date(from: batch.left.end),
+                                let rightStart = formatter.date(from: batch.right.start),
+                                let rightEnd = formatter.date(from: batch.right.end)
+                            else {
+                                continuation.resume(returning: "Erreur période comparaison")
+                                return
+                            }
+
+                            let reply = await self.requestSnapshotBatchAndRetry(
+                                message: message,
+                                leftStart: leftStart,
+                                leftEnd: leftEnd,
+                                rightStart: rightStart,
+                                rightEnd: rightEnd,
+                                meta: meta
+                            )
+
+                            continuation.resume(returning: reply)
+                            return
+                        }
+
+                        // 🟠 Demande SNAPSHOT SIMPLE
+                        if decoded.type == "REQUEST_SNAPSHOT",
+                           let period = decoded.period {
+
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+
+                            guard
+                                let start = formatter.date(from: period.start),
+                                let end = formatter.date(from: period.end)
+                            else {
+                                continuation.resume(returning: "Erreur période")
+                                return
+                            }
+
+                            let reply = await self.requestSnapshotAndRetry(
+                                message: message,
+                                start: start,
+                                end: end
+                            )
+
+                            continuation.resume(returning: reply)
+                            return
+                        }
+
+                        continuation.resume(returning: "Réponse invalide du serveur")
+
+
+
+                    } catch {
+                        print("❌ ERREUR RÉSEAU:", error)
+                        continuation.resume(returning: "Le coach ne répond pas")
+                    }
                 }
-
-                return await requestSnapshotAndRetry(
-                    message: message,
-                    start: start,
-                    end: end
-                )
             }
-
-            return "Réponse invalide du serveur"
-
-        } catch {
-            print("❌ ERREUR RÉSEAU:", error)
-            return "Le coach ne répond pas actuellement"
         }
     }
+
 
 
     private func sendPayload(_ payload: ChatRequest) async -> String? {
@@ -150,7 +201,27 @@ class ChatViewModel: ObservableObject {
             return "Erreur serveur."
         }
     }
+    
+    private func sendPayloadRaw(_ payload: ChatRequest) async -> CoachAPIResponse? {
+        guard let url = URL(string: "http://192.168.1.77:8000/chat") else {
+            return nil
+        }
 
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            req.httpBody = try encoder.encode(payload)
+
+            let (data, _) = try await URLSession.shared.data(for: req)
+            return try JSONDecoder().decode(CoachAPIResponse.self, from: data)
+        } catch {
+            return nil
+        }
+    }
     
     func requestSnapshotAndRetry(
         message: String,
@@ -173,6 +244,43 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+
+    func requestSnapshotBatchAndRetry(
+        message: String,
+        leftStart: Date,
+        leftEnd: Date,
+        rightStart: Date,
+        rightEnd: Date,
+        meta: [String: String]
+    ) async -> String? {
+
+        await withCheckedContinuation { continuation in
+
+            healthManager.makeSnapshot(from: leftStart, to: leftEnd) { leftSnapshot in
+                self.healthManager.makeSnapshot(from: rightStart, to: rightEnd) { rightSnapshot in
+
+                    Task {
+                        let payload = ChatRequest(
+                            message: message,
+                            snapshot: leftSnapshot,   // 🔑 snapshot requis par FastAPI
+                            snapshots: SnapshotPair(
+                                left: leftSnapshot,
+                                right: rightSnapshot
+                            ),
+                            meta: meta
+                        )
+
+                        let decoded = await self.sendPayloadRaw(payload)
+
+                        continuation.resume(
+                            returning: decoded?.reply ?? "Erreur comparaison."
+                        )
+                    }
+                }
+            }
+        }
+    }
+
 
 
 }

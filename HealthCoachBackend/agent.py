@@ -1,36 +1,8 @@
 import json
 from datetime import date, timedelta
-from llm import call_ollama
-
-SYSTEM_COACH_PROMPT = """
-Tu es un coach de course à pied intelligent et professionnel.
-
-RÈGLES STRICTES :
-- Tu analyses les données UNIQUEMENT si la question de l'utilisateur est claire et explicite.
-- Si le message est vague, ambigu ou une simple salutation
-  (ex: "hello", "salut", "bonjour", "ok", "ça va ?"),
-  tu NE DOIS PAS analyser les statistiques.
-- Dans ce cas, tu dois répondre brièvement
-  en demandant ce que l'utilisateur souhaite analyser.
-- Si la période déjà fournie CORRESPOND EXACTEMENT à la période demandée
-  retourne ANSWER_NOW.
-
-
-Exemples de questions claires :
-- "Est-ce que je cours trop vite ?"
-- "Fais-moi un résumé de la semaine"
-- "Est-ce que je progresse ?"
-
-Exemples de réponses attendues si la question est vague :
-- "Salut 👋 Que veux-tu analyser : ton rythme, ton volume ou ta récupération ?"
-- "Dis-moi ce que tu aimerais comprendre sur tes entraînements."
-
-Sois concis, clair et bienveillant.
-Ne fais jamais d'analyse spontanée sans intention explicite.
-"""
-
+from services.llm import call_ollama
+import calendar
 import json
-from llm import call_ollama
 
 
 def analyze_question(message: str, current_period: tuple[str, str]) -> dict:
@@ -48,8 +20,8 @@ Tu dois retourner UNE décision JSON valide, et RIEN d'autre.
 1️⃣ PRIORITÉ ABSOLUE — SMALL TALK
 ========================================
 
-Si le message est une salutation ou une phrase vague
-(ex: "hello", "salut", "bonjour", "ça va", "merci", "ok") :
+- Si le message est une salutation ou une phrase vague
+    (ex: "hello", "salut", "bonjour", "ça va", "merci", "ok") :
 
 Retourne EXACTEMENT :
 {{
@@ -57,7 +29,11 @@ Retourne EXACTEMENT :
   "answer_mode": "SMALL_TALK"
 }}
 
-Tu n’as PAS le droit de demander un snapshot dans ce cas.
+- Tu n’as PAS le droit de demander un snapshot dans ce cas.
+
+- Si la phrase contient un indicateur quantitatif
+    (distance, km, temps, durée, séance, nombre),
+    ALORS ce n’est PAS du small talk.
 
 ========================================
 2️⃣ CHANGEMENT DE PÉRIODE — SEMAINES
@@ -180,10 +156,95 @@ Retourne :
 }}
 
 ========================================
+NORMALISATION DES MÉTRIQUES (OBLIGATOIRE)
+========================================
+
+Tu DOIS utiliser UNIQUEMENT les métriques suivantes :
+
+- DISTANCE
+- DURATION
+- SESSIONS
+- AVG_HR
+- PACE
+- ELEVATION
+- LOAD
+- UNKNOWN
+
+INTERDIT ABSOLUMENT :
+- TIME
+- TEMPS
+- HOURS
+- MINUTES
+- KMH
+- SPEED
+
+RÈGLE :
+- "temps", "durée", "time", "heures", "minutes" → DURATION
+- "km", "kilomètres", "distance" → DISTANCE
+- "séances", "entraînements" → SESSIONS
+
+Si tu n’es pas sûr → UNKNOWN
+
+========================================
 MÉTRIQUES POSSIBLES
 ========================================
 
 DISTANCE | DURATION | SESSIONS | AVG_HR | PACE | ELEVATION | LOAD | UNKNOWN
+
+========================================
+2️⃣ COMPARAISONS (PRIORITÉ HAUTE)
+========================================
+
+Si la question compare deux périodes
+(ex: "plus que", "moins que", "autant que", "comparé à", "par rapport à") :
+
+Retourne :
+{{
+  "type": "COMPARE_PERIODS",
+  "metric": "<métrique détectée>",
+  "left": "<période A>",
+  "right": "<période B>"
+}}
+
+Exemples :
+
+"Est-ce que j’ai couru plus que la semaine dernière ?"
+→
+{{
+        "type": "COMPARE_PERIODS",
+  "metric": "DISTANCE",
+  "left": "CURRENT_WEEK",
+  "right": "PREVIOUS_WEEK"
+}}
+
+"Est-ce que je fais plus de séances ce mois-ci ?"
+→
+{{
+        "type": "COMPARE_PERIODS",
+  "metric": "SESSIONS",
+  "left": "CURRENT_MONTH",
+  "right": "PREVIOUS_MONTH"
+}}
+
+Si la question contient :
+- "ce mois par rapport au mois dernier"
+→
+{{
+        "type": "COMPARE_PERIODS",
+  "metric": "<metric>",
+  "left": "CURRENT_MONTH",
+  "right": "PREVIOUS_MONTH"
+}}
+
+Si la question contient :
+- "les deux dernières semaines"
+→
+{{
+        "type": "COMPARE_PERIODS",
+  "metric": "<metric>",
+  "left": "LAST_2_WEEKS",
+  "right": "PREVIOUS_2_WEEKS"
+}}
 
 ========================================
 QUESTION
@@ -307,3 +368,74 @@ def safe_parse_json(raw: str) -> dict | None:
         return json.loads(raw[start:end])
     except Exception:
         return None
+
+
+def comparison_response_agent(
+    message: str,
+    metric: str,
+    delta: dict,
+    left_label: str,
+    right_label: str,
+) -> str:
+    prompt = f"""
+Tu es un coach de course à pied clair, précis et fiable.
+
+Tu analyses une COMPARAISON entre deux périodes :
+{left_label} vs {right_label}
+
+Tu disposes UNIQUEMENT des écarts suivants (ce ne sont PAS des totaux) :
+- Distance : {delta["distance_km"]} km
+- Durée : {delta["duration_min"]} minutes
+- Séances : {delta["sessions"]}
+
+INTERPRÉTATION DES CHIFFRES :
+- Valeur positive → PLUS
+- Valeur négative → MOINS
+- Valeur proche de zéro → STABLE
+
+RÈGLES ABSOLUES :
+- Tu n’inventes AUCUN chiffre
+- Tu n’arrondis PAS autrement que ce qui est fourni
+- Tu n’expliques PAS comment les chiffres sont calculés
+- Tu ne fais AUCUNE supposition
+- Tu n’emploies JAMAIS une formulation contradictoire
+  (ex: "moins de temps" si la durée est positive)
+
+ADAPTATION À LA QUESTION :
+- Si la question est une QUESTION FERMÉE (oui / non),
+  commence par "Oui" ou "Non", puis explique.
+- Si la question est une DEMANDE DE COMPARAISON,
+  commence par un CONSTAT GLOBAL, sans "oui" ni "non".
+
+STRUCTURE GÉNÉRALE :
+- 1 phrase de réponse principale adaptée à la question
+- 1 phrase qui précise distance, durée et séances
+
+EXEMPLES À SUIVRE STRICTEMENT :
+
+Exemple A — Question fermée :
+Question : "Ai-je couru plus cette semaine que la semaine dernière ?"
+Distance = +5 km, Durée = +30 min, Séances = +1
+→
+"Oui, tu as couru davantage. Tu as parcouru environ 5 km de plus, passé 30 minutes supplémentaires à courir et ajouté une séance."
+
+Exemple B — Question fermée :
+Distance = -3 km, Durée = -20 min, Séances = -1
+→
+"Non, ton volume est un peu plus bas. Tu as couru environ 3 km de moins, passé 20 minutes de moins à courir et fait une séance en moins."
+
+Exemple C — Demande de comparaison :
+Question : "Compare ce mois avec le mois dernier"
+Distance = -95.9 km, Durée = -634 min, Séances = -12
+→
+"Ce mois-ci, ton volume est nettement plus bas. Tu as couru environ 95.9 km de moins, passé 634 minutes de moins à courir et effectué 12 séances en moins."
+
+Exemple D — Situation stable :
+Distance = +0.5 km, Durée = +2 min, Séances = 0
+→
+"C’est très proche de la période précédente, avec seulement un léger surplus de distance et de temps, et un nombre de séances identique."
+
+QUESTION UTILISATEUR :
+"{message}"
+"""
+    return call_ollama(prompt)
