@@ -439,3 +439,51 @@ QUESTION UTILISATEUR :
 "{message}"
 """
     return call_ollama(prompt)
+
+
+def summary_response(snapshot) -> dict:
+    start = snapshot.period.start
+    end = snapshot.period.end
+
+    if snapshot.totals.sessions == 0:
+        return {
+            "reply": f"Aucune séance enregistrée sur la période du {start} au {end}."
+        }
+
+    # Totaux
+    distance = round(snapshot.totals.distance_km, 1)
+    duration_min = round(snapshot.totals.duration_min)
+    hours = duration_min // 60
+    minutes = duration_min % 60
+    sessions = snapshot.totals.sessions
+    elevation = round(snapshot.totals.elevation_m)
+
+    # Zones cardiaques (en minutes)
+    zones = snapshot.zones_percent or {}
+    zones_text = []
+    for z in ["z1", "z2", "z3", "z4", "z5"]:
+        if z in zones:
+            zones_text.append(f"{z.upper()} : {round(zones[z])}%")
+
+    zones_str = ", ".join(zones_text) if zones_text else "non disponibles"
+
+    # Plus grosse sortie
+    longest = max(
+        snapshot.daily_runs,
+        key=lambda r: r.distance_km,
+        default=None,
+    )
+
+    longest_str = f"{round(longest.distance_km, 1)} km" if longest else "non disponible"
+
+    return {
+        "reply": (
+            f"📊 **Bilan de la période {start} → {end}**\n\n"
+            f"🏃 Distance totale : **{distance} km**\n"
+            f"⏱️ Temps total : **{hours}h{minutes:02d}**\n"
+            f"📆 Séances : **{sessions}**\n"
+            f"⛰️ D+ : **{elevation} m**\n\n"
+            f"❤️ Répartition cardiaque : {zones_str}\n"
+            f"🏅 Plus longue sortie : **{longest_str}**"
+        )
+    }
