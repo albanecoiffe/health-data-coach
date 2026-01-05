@@ -8,6 +8,7 @@ from agent import (
     answer_with_snapshot,
     factual_response,
     comparison_response_agent,
+    summary_response,
 )
 import re
 from services.periods import period_to_dates, normalize
@@ -104,8 +105,15 @@ def chat(req: ChatRequest):
         req.message,
         (req.snapshot.period.start, req.snapshot.period.end),
     )
-    # 🛡️ VERROU BACKEND — COMPARAISON EXPLICITE (priorité absolue)
+
     msg = normalize(req.message)
+
+    # 🛡️ VERROU BACKEND — DEMANDE DE BILAN
+    if any(k in msg for k in ["bilan", "resume", "résumé", "recap", "synthese"]):
+        decision = {"type": "SUMMARY"}
+        print("🛡️ OVERRIDE BACKEND → SUMMARY")
+
+    # 🛡️ VERROU BACKEND — COMPARAISON EXPLICITE (priorité absolue)
     if any(
         k in msg
         for k in [
@@ -349,6 +357,11 @@ def chat(req: ChatRequest):
                 "right_label": LABELS.get(decision["right"], "période 2"),
             },
         }
+    # ======================================================
+    # 🟣 SUMMARY
+    # ======================================================
+    if decision_type == "SUMMARY":
+        return summary_response(req.snapshot)
 
     # ======================================================
     # 🟢 ANSWER_NOW
