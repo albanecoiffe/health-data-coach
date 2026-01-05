@@ -924,19 +924,14 @@ extension HealthManager {
         completion: @escaping ([DailyRunData]) -> Void
     ) {
 
-        let calendar = Calendar.current
-        let endInclusive = calendar.date(
-            bySettingHour: 23,
-            minute: 59,
-            second: 59,
-            of: endDate
-        )!
+        
 
         let datePredicate = HKQuery.predicateForSamples(
             withStart: startDate,
-            end: endInclusive,
-            options: []
+            end: endDate,
+            options: .strictStartDate
         )
+
 
         let runningPredicate = HKQuery.predicateForWorkouts(with: .running)
         let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [

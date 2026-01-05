@@ -1,37 +1,60 @@
 from datetime import date, timedelta
 import calendar
+import re
+
+from datetime import date, timedelta
+import calendar
 
 
 def period_to_dates(period_key: str):
+    """
+    Retourne une période (start, end) avec la convention :
+    - start inclus
+    - end EXCLUSIF
+    """
     today = date.today()
 
+    # ======================
+    # 📆 SEMAINES
+    # ======================
     if period_key == "CURRENT_WEEK":
-        start = today - timedelta(days=today.weekday())
+        start = today - timedelta(days=today.weekday())  # lundi
         end = start + timedelta(days=7)
         return start, end
 
     if period_key == "PREVIOUS_WEEK":
-        start = today - timedelta(days=today.weekday() + 7)
-        end = start + timedelta(days=7)
+        end = today - timedelta(days=today.weekday())
+        start = end - timedelta(days=7)
         return start, end
 
+    # ======================
+    # 📆 MOIS
+    # ======================
     if period_key == "CURRENT_MONTH":
         start = date(today.year, today.month, 1)
-        end = date(
-            today.year, today.month, calendar.monthrange(today.year, today.month)[1]
-        )
+        days_in_month = calendar.monthrange(today.year, today.month)[1]
+        end = start + timedelta(days=days_in_month)
         return start, end
 
     if period_key == "PREVIOUS_MONTH":
-        month = today.month - 1 or 12
-        year = today.year - 1 if today.month == 1 else today.year
+        if today.month == 1:
+            year = today.year - 1
+            month = 12
+        else:
+            year = today.year
+            month = today.month - 1
+
         start = date(year, month, 1)
-        end = date(year, month, calendar.monthrange(year, month)[1])
+        days_in_month = calendar.monthrange(year, month)[1]
+        end = start + timedelta(days=days_in_month)
         return start, end
 
+    # ======================
+    # 📆 PÉRIODES GLISSANTES
+    # ======================
     if period_key == "LAST_2_WEEKS":
         end = today
-        start = today - timedelta(days=14)
+        start = end - timedelta(days=14)
         return start, end
 
     if period_key == "PREVIOUS_2_WEEKS":
@@ -39,6 +62,9 @@ def period_to_dates(period_key: str):
         start = end - timedelta(days=14)
         return start, end
 
+    # ======================
+    # ❌ ERREUR
+    # ======================
     raise ValueError(f"Période inconnue : {period_key}")
 
 
@@ -64,26 +90,3 @@ def normalize(text: str) -> str:
     text = text.replace("–", "-").replace("—", "-")
 
     return text
-
-
-def resolve_period(message: str, snapshot_period: tuple[str, str]):
-    msg = normalize(message)
-    today = date.today()
-
-    # === SEMAINES ===
-    if "semaine derniere" in msg or "semaine precedente" in msg:
-        return period_to_dates("PREVIOUS_WEEK")
-
-    if "cette semaine" in msg or "semaine actuelle" in msg:
-        return period_to_dates("CURRENT_WEEK")
-
-    # === MOIS ===
-    if "mois dernier" in msg:
-        return period_to_dates("PREVIOUS_MONTH")
-
-    if "ce mois" in msg or "ce mois ci" in msg:
-        return period_to_dates("CURRENT_MONTH")
-
-    # === FALLBACK → période courante
-    start, end = snapshot_period
-    return date.fromisoformat(start), date.fromisoformat(end)
