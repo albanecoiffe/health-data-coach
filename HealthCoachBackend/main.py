@@ -9,7 +9,7 @@ from agent import (
     factual_response,
     comparison_response_agent,
 )
-
+import re
 from services.periods import period_to_dates, normalize
 from services.comparisons import compare_snapshots
 
@@ -107,12 +107,26 @@ def chat(req: ChatRequest):
     # 🛡️ VERROU BACKEND — MOIS NOMMÉ (octobre, mars, etc.)
     msg = normalize(req.message)
 
+    # 🛡️ VERROU BACKEND — RÉSUMÉ DE SEMAINE
+    if (
+        any(k in msg for k in ["resume", "bilan", "synthese", "stat"])
+        and "semaine" in msg
+    ):
+        decision = {
+            "type": "ANSWER_NOW",
+            "answer_mode": "FACTUAL",
+            "metric": "DISTANCE",  # ou None si tu veux un résumé multi-métriques plus tard
+        }
+        print("🛡️ OVERRIDE BACKEND → résumé de semaine détecté")
+
+    # 🛡️ VERROU BACKEND — MOIS NOMMÉ (mot entier uniquement)
     for month_name, month_num in MONTHS.items():
-        if month_name in msg:
+        pattern = rf"\b{month_name}\b"
+        if re.search(pattern, msg):
             decision = {
                 "type": "REQUEST_MONTH",
                 "month": month_num,
-                "year": None,  # résolu plus bas
+                "year": None,
                 "metric": decision.get("metric") or "DISTANCE",
             }
             print(f"🛡️ OVERRIDE BACKEND → mois détecté : {month_name}")
