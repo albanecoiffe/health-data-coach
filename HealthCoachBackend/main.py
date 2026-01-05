@@ -104,6 +104,19 @@ def chat(req: ChatRequest):
         req.message,
         (req.snapshot.period.start, req.snapshot.period.end),
     )
+    # 🛡️ VERROU BACKEND — MOIS NOMMÉ (octobre, mars, etc.)
+    msg = normalize(req.message)
+
+    for month_name, month_num in MONTHS.items():
+        if month_name in msg:
+            decision = {
+                "type": "REQUEST_MONTH",
+                "month": month_num,
+                "year": None,  # résolu plus bas
+                "metric": decision.get("metric") or "DISTANCE",
+            }
+            print(f"🛡️ OVERRIDE BACKEND → mois détecté : {month_name}")
+            break
 
     # 🛡️ VERROU BACKEND — semaine précédente = REQUEST_WEEK
     msg = normalize(req.message)
