@@ -20,8 +20,8 @@ Tu dois retourner UNE décision JSON valide, et RIEN d'autre.
 1️⃣ PRIORITÉ ABSOLUE — SMALL TALK
 ========================================
 
-Si le message est une salutation ou une phrase vague
-(ex: "hello", "salut", "bonjour", "ça va", "merci", "ok") :
+- Si le message est une salutation ou une phrase vague
+    (ex: "hello", "salut", "bonjour", "ça va", "merci", "ok") :
 
 Retourne EXACTEMENT :
 {{
@@ -29,7 +29,11 @@ Retourne EXACTEMENT :
   "answer_mode": "SMALL_TALK"
 }}
 
-Tu n’as PAS le droit de demander un snapshot dans ce cas.
+- Tu n’as PAS le droit de demander un snapshot dans ce cas.
+
+- Si la phrase contient un indicateur quantitatif
+    (distance, km, temps, durée, séance, nombre),
+    ALORS ce n’est PAS du small talk.
 
 ========================================
 2️⃣ CHANGEMENT DE PÉRIODE — SEMAINES

@@ -40,3 +40,27 @@ def period_to_dates(period_key: str):
         return start, end
 
     raise ValueError(f"Période inconnue : {period_key}")
+
+
+import unicodedata
+
+
+def normalize(text: str) -> str:
+    text = text.lower()
+
+    # Normalisation Unicode (séparation accents)
+    text = unicodedata.normalize("NFD", text)
+
+    # Suppression des accents
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+
+    # Normalisation des apostrophes et guillemets
+    text = text.replace("’", "'")
+    text = text.replace("‘", "'")
+    text = text.replace("`", "'")
+    text = text.replace("´", "'")
+
+    # Optionnel mais recommandé : tirets typographiques → tiret simple
+    text = text.replace("–", "-").replace("—", "-")
+
+    return text

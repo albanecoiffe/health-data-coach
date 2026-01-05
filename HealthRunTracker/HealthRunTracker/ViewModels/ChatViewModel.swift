@@ -96,10 +96,74 @@ class ChatViewModel: ObservableObject {
 
                         let decoded = try JSONDecoder().decode(CoachAPIResponse.self, from: data)
 
-                        continuation.resume(returning: decoded.reply ?? "Pas de réponse")
                         print("🟣 RAW:", String(data: data, encoding: .utf8) ?? "nil")
                         print("🟣 reply:", decoded.reply ?? "nil")
                         print("🟣 type:", decoded.type ?? "nil")
+
+                        // 🟢 Réponse finale
+                        if let reply = decoded.reply {
+                            continuation.resume(returning: reply)
+                            return
+                        }
+
+                        // 🟣 Demande SNAPSHOT BATCH (COMPARAISON)
+                        if decoded.type == "REQUEST_SNAPSHOT_BATCH",
+                           let batch = decoded.snapshots,
+                           let meta = decoded.meta {
+
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+
+                            guard
+                                let leftStart = formatter.date(from: batch.left.start),
+                                let leftEnd = formatter.date(from: batch.left.end),
+                                let rightStart = formatter.date(from: batch.right.start),
+                                let rightEnd = formatter.date(from: batch.right.end)
+                            else {
+                                continuation.resume(returning: "Erreur période comparaison")
+                                return
+                            }
+
+                            let reply = await self.requestSnapshotBatchAndRetry(
+                                message: message,
+                                leftStart: leftStart,
+                                leftEnd: leftEnd,
+                                rightStart: rightStart,
+                                rightEnd: rightEnd,
+                                meta: meta
+                            )
+
+                            continuation.resume(returning: reply)
+                            return
+                        }
+
+                        // 🟠 Demande SNAPSHOT SIMPLE
+                        if decoded.type == "REQUEST_SNAPSHOT",
+                           let period = decoded.period {
+
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+
+                            guard
+                                let start = formatter.date(from: period.start),
+                                let end = formatter.date(from: period.end)
+                            else {
+                                continuation.resume(returning: "Erreur période")
+                                return
+                            }
+
+                            let reply = await self.requestSnapshotAndRetry(
+                                message: message,
+                                start: start,
+                                end: end
+                            )
+
+                            continuation.resume(returning: reply)
+                            return
+                        }
+
+                        continuation.resume(returning: "Réponse invalide du serveur")
+
 
 
                     } catch {
@@ -198,11 +262,11 @@ class ChatViewModel: ObservableObject {
                     Task {
                         let payload = ChatRequest(
                             message: message,
-                            snapshot: leftSnapshot, // 🔑 SNAPSHOT PRINCIPAL COHÉRENT
-                            snapshots: [
-                                "left": leftSnapshot,
-                                "right": rightSnapshot
-                            ],
+                            snapshot: leftSnapshot,   // 🔑 snapshot requis par FastAPI
+                            snapshots: SnapshotPair(
+                                left: leftSnapshot,
+                                right: rightSnapshot
+                            ),
                             meta: meta
                         )
 

@@ -10,11 +10,26 @@ from agent import (
     comparison_response_agent,
 )
 
-from services.periods import period_to_dates
+from services.periods import period_to_dates, normalize
 from services.comparisons import compare_snapshots
 
 from datetime import date, timedelta
 import calendar
+
+MONTHS = {
+    "janvier": 1,
+    "fevrier": 2,
+    "mars": 3,
+    "avril": 4,
+    "mai": 5,
+    "juin": 6,
+    "juillet": 7,
+    "aout": 8,
+    "septembre": 9,
+    "octobre": 10,
+    "novembre": 11,
+    "decembre": 12,
+}
 
 app = FastAPI()
 
@@ -90,6 +105,27 @@ def chat(req: ChatRequest):
         (req.snapshot.period.start, req.snapshot.period.end),
     )
 
+    # 🛡️ VERROU BACKEND — semaine précédente = REQUEST_WEEK
+    msg = normalize(req.message)
+
+    if any(
+        k in msg
+        for k in [
+            "semaine précédente",
+            "semaine derniere",
+            "semaine dernière",
+            "la semaine d'avant",
+            "semaine d’avant",
+            "précédente",
+        ]
+    ):
+        decision = {
+            "type": "REQUEST_WEEK",
+            "offset": -1,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+        print("🛡️ OVERRIDE BACKEND → semaine précédente = REQUEST_WEEK (-1)")
+
     # 🛡️ VERROU BACKEND — cette semaine = FACTUAL
     if decision.get("type") == "ANSWER_NOW" and (
         "cette semaine" in req.message.lower()
@@ -156,11 +192,19 @@ def chat(req: ChatRequest):
             }
 
         month = int(month)
-        year = (
-            int(raw_year)
-            if isinstance(raw_year, int)
-            else int(req.snapshot.period.start[:4])
-        )
+        today = date.today()
+
+        if isinstance(raw_year, int):
+            year = raw_year
+
+            if year > today.year or (year == today.year and month > today.month):
+                year = today.year - 1
+        else:
+            # Mois sans année → dernier mois écoulé
+            if month < today.month:
+                year = today.year
+            else:
+                year = today.year - 1
 
         start = date(year, month, 1)
         end = date(year, month, calendar.monthrange(year, month)[1])
@@ -182,7 +226,7 @@ def chat(req: ChatRequest):
     # 🟠 REQUEST_MONTH_RELATIVE
     # ======================================================
     if decision_type == "REQUEST_MONTH_RELATIVE":
-        msg = req.message.lower()
+        msg = normalize(req.message)
 
         if "ce mois" in msg:
             offset = 0
