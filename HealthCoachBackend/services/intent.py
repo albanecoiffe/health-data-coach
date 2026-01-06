@@ -49,6 +49,155 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     if decision.get("type") == "COMPARE_PERIODS":
         return decision
 
+    # ======================================================
+    # 🔴 SEMAINE — PRIORITÉ ABSOLUE
+    # ======================================================
+    if any(
+        k in msg
+        for k in [
+            "cette semaine",
+            "semaine en cours",
+        ]
+    ):
+        return {
+            "type": "REQUEST_WEEK",
+            "offset": 0,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    match = re.search(r"il y a (\d+) semaines?", msg)
+    if match:
+        return {
+            "type": "REQUEST_WEEK",
+            "offset": -int(match.group(1)),
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    if any(
+        k in msg
+        for k in [
+            "semaine derniere",
+            "semaine dernière",
+            "la semaine derniere",
+            "la semaine dernière",
+            "semaine precedente",
+            "semaine précédente",
+            "semaine d'avant",
+        ]
+    ):
+        return {
+            "type": "REQUEST_WEEK",
+            "offset": -1,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    # ======================================================
+    # 🔴 MOIS — PRIORITÉ ABSOLUE
+    # ======================================================
+    if any(
+        k in msg
+        for k in [
+            "ce mois",
+            "ce mois-ci",
+            "mois en cours",
+        ]
+    ):
+        return {
+            "type": "REQUEST_MONTH_RELATIVE",
+            "offset": 0,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    if any(
+        k in msg
+        for k in [
+            "mois dernier",
+            "le mois dernier",
+            "mois precedent",
+            "mois précédente",
+        ]
+    ):
+        return {
+            "type": "REQUEST_MONTH_RELATIVE",
+            "offset": -1,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    # Mois explicite (septembre, mars, etc.)
+    for month_name, month_num in MONTHS.items():
+        if re.search(rf"\b{month_name}\b", msg):
+            return {
+                "type": "REQUEST_MONTH",
+                "month": month_num,
+                "year": extract_year(msg),
+                "metric": decision.get("metric") or "DISTANCE",
+            }
+    # il y a X mois
+    match = re.search(r"(\d+) mois", msg)
+    if match:
+        return {
+            "type": "REQUEST_MONTH_RELATIVE",
+            "offset": -int(match.group(1)),
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    # ======================================================
+    # 🔴 ANNÉE RELATIVE — PRIORITÉ ABSOLUE (même hors bilan)
+    # ======================================================
+    if any(
+        k in msg
+        for k in [
+            "cette annee",
+            "cette année",
+            "année en cours",
+            "annee en cours",
+            "cet an",
+            "an en cours",
+        ]
+    ):
+        return {
+            "type": "REQUEST_YEAR_RELATIVE",
+            "offset": 0,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    if any(
+        k in msg
+        for k in [
+            "annee derniere",
+            "année dernière",
+            "an dernier",
+            "annee precedente",
+            "année précédente",
+        ]
+    ):
+        return {
+            "type": "REQUEST_YEAR_RELATIVE",
+            "offset": -1,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+    year = extract_year(msg)
+
+    if year is not None:
+        return {
+            "type": "REQUEST_YEAR",
+            "year": year,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    # il y a X années
+    match = re.search(r"(\d+) ans", msg) or re.search(r"(\d+) annees", msg)
+    if match:
+        return {
+            "type": "REQUEST_YEAR_RELATIVE",
+            "offset": -int(match.group(1)),
+            "metric": decision.get("metric") or "DISTANCE",
+        }
+
+    # ======================================================
+    # 4️⃣ BILAN SANS PÉRIODE → PÉRIODE COURANTE
+    # ======================================================
+
     is_summary = any(
         k in msg
         for k in [
@@ -62,141 +211,8 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
         ]
     )
 
-    # ======================================================
-    # PRIORITÉ ABSOLUE — MOIS EXPLICITE
-    # ======================================================
-    for month_name, month_num in MONTHS.items():
-        if re.search(rf"\b{month_name}\b", msg):
-            return {
-                "type": "REQUEST_MONTH",
-                "month": month_num,
-                "year": extract_year(msg),
-                "metric": decision.get("metric") or "DISTANCE",
-            }
-    if (
-        "mois dernier" in msg
-        or "le mois dernier" in msg
-        or "mois precedente" in msg
-        or "le mois precedente" in msg
-        or "mois précédente" in msg
-        or "le mois précédente" in msg
-    ):
-        return {
-            "type": "REQUEST_MONTH_RELATIVE",
-            "offset": -1,
-            "metric": decision.get("metric") or "DISTANCE",
-        }
-
-    if (
-        "ce mois" in msg
-        or "ce mois-ci" in msg
-        or "ce mois ci" in msg
-        or "le mois en cours" in msg
-    ):
-        return {
-            "type": "REQUEST_MONTH_RELATIVE",
-            "offset": 0,
-            "metric": decision.get("metric") or "DISTANCE",
-        }
-
-    # ======================================================
-    # ANNÉE RELATIVE (cette année, l’an dernier, etc.)
-    # ======================================================
-    if is_summary:
-        if any(
-            k in msg
-            for k in [
-                "cette annee",
-                "cette année",
-                "année en cours",
-                "annee en cours",
-                "cet an",
-                "an en cours",
-            ]
-        ):
-            return {
-                "type": "REQUEST_YEAR_RELATIVE",
-                "offset": 0,
-            }
-
-        if any(
-            k in msg
-            for k in [
-                "annee derniere",
-                "année dernière",
-                "an dernier",
-                "annee precedente",
-                "année précédente",
-                "an precedente",
-                "an précédente",
-            ]
-        ):
-            return {
-                "type": "REQUEST_YEAR_RELATIVE",
-                "offset": -1,
-            }
-
-    # ======================================================
-    # 3️⃣ ANNÉE EXPLICITE (2025, 2024…)
-    # ======================================================
-    if is_summary:
-        year = extract_year(msg)
-        if year is not None:
-            return {
-                "type": "REQUEST_YEAR",
-                "year": year,
-            }
-
-    # ======================================================
-    # semaine
-    # ======================================================
-    if decision.get("type") == "SUMMARY":
-        # "il y a X semaines"
-        match = re.search(r"il y a (\d+) semaines?", msg)
-        if match:
-            offset = -int(match.group(1))
-            return {
-                "type": "REQUEST_WEEK",
-                "offset": offset,
-            }
-
-        # "semaine dernière"
-        if (
-            "semaine derniere" in msg
-            or "semaine dernière" in msg
-            or "la semaine derniere" in msg
-            or "la semaine dernière" in msg
-            or "semaine d'avant" in msg
-            or "la semaine d'avant" in msg
-            or "semaine précédente" in msg
-            or "la semaine précédente" in msg
-        ):
-            return {
-                "type": "REQUEST_WEEK",
-                "offset": -1,
-            }
-
-        # "cette semaine"
-        if "cette semaine" in msg:
-            return {
-                "type": "REQUEST_WEEK",
-                "offset": 0,
-            }
-    # ======================================================
-    # 4️⃣ BILAN SANS PÉRIODE → PÉRIODE COURANTE
-    # ======================================================
     if is_summary:
         return {"type": "SUMMARY"}
-
-    # ======================================================
-    # 5️⃣ SEMAINE PRÉCÉDENTE
-    # ======================================================
-    if re.search(r"\b(semaine)\b.*\b(precedente|derniere|davant)\b", msg):
-        return {
-            "type": "REQUEST_WEEK",
-            "offset": -1,
-            "metric": decision.get("metric") or "DISTANCE",
-        }
 
     return decision
 
