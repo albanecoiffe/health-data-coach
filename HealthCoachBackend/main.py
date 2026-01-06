@@ -1,35 +1,17 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from schemas import ChatRequest
 from agent import (
     analyze_question,
-    answer_with_snapshot,
-    factual_response,
     comparison_response_agent,
 )
-import re
-from services.periods import period_to_dates, normalize
-from services.comparisons import compare_snapshots
-
-from datetime import date, timedelta
-import calendar
-
-MONTHS = {
-    "janvier": 1,
-    "fevrier": 2,
-    "mars": 3,
-    "avril": 4,
-    "mai": 5,
-    "juin": 6,
-    "juillet": 7,
-    "aout": 8,
-    "septembre": 9,
-    "octobre": 10,
-    "novembre": 11,
-    "decembre": 12,
-}
+from services.comparisons import resolve_intent, infer_period_context_from_keys
+from services.intent import (
+    apply_backend_overrides,
+    route_decision,
+)
 
 app = FastAPI()
 
@@ -57,303 +39,69 @@ def root():
 def chat(req: ChatRequest):
     print("\n================= CHAT =================")
     print("📝 MESSAGE :", req.message)
-    print("📦 SNAPSHOT REÇU PAR LE BACKEND")
+    print("📦 SNAPSHOT REÇU")
     print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
-
-    print("   📏 Distance (km) :", req.snapshot.totals.distance_km)
-    print("   ⏱️ Durée (min)   :", req.snapshot.totals.duration_min)
-    print("   📆 Séances       :", req.snapshot.totals.sessions)
+    print("🔥 snapshots =", req.snapshots)
+    print("🔥 meta =", req.meta)
 
     # ======================================================
     # 🔴 COMPARAISON FINALE — PRIORITÉ ABSOLUE
-    # ⚠️ snapshots + meta présents → AUCUN LLM DE DÉCISION
+    # (snapshots + meta déjà fournis)
     # ======================================================
     if req.snapshots is not None and req.meta is not None:
         print("🟢 COMPARAISON FINALE — SNAPSHOTS PRÉSENTS")
 
+        if not req.snapshots:
+            raise HTTPException(
+                status_code=400, detail="snapshots manquant pour comparaison"
+            )
+
         left = req.snapshots.left
         right = req.snapshots.right
 
+        raw_delta_distance = right.totals.distance_km - left.totals.distance_km
+        raw_delta_duration = right.totals.duration_min - left.totals.duration_min
+        raw_delta_sessions = right.totals.sessions - left.totals.sessions
+
+        trend = (
+            "UP"
+            if raw_delta_distance > 0
+            else "DOWN"
+            if raw_delta_distance < 0
+            else "STABLE"
+        )
+
         delta = {
-            "distance_km": round(left.totals.distance_km - right.totals.distance_km, 1),
-            "duration_min": round(left.totals.duration_min - right.totals.duration_min),
-            "sessions": left.totals.sessions - right.totals.sessions,
+            "distance_km": round(abs(raw_delta_distance), 1),
+            "duration_min": round(abs(raw_delta_duration)),
+            "sessions": abs(raw_delta_sessions),
+            "trend": trend,
         }
 
         reply = comparison_response_agent(
             message=req.message,
             metric=req.meta.get("metric", "DISTANCE"),
             delta=delta,
-            left_label=req.meta.get("left_label", "période 1"),
-            right_label=req.meta.get("right_label", "période 2"),
+            left_period=(left.period.start, left.period.end),
+            right_period=(right.period.start, right.period.end),
         )
 
         return {"reply": reply}
 
     # ======================================================
-    # 🔵 FLOW NORMAL — ANALYSE LLM AUTORISÉE
+    # 🔵 FLOW NORMAL — ANALYSE + VERROUS BACKEND
     # ======================================================
-    print(
-        "📦 SNAPSHOT :",
-        req.snapshot.period.start,
-        "→",
-        req.snapshot.period.end,
-    )
-
     decision = analyze_question(
         req.message,
         (req.snapshot.period.start, req.snapshot.period.end),
     )
-    # 🛡️ VERROU BACKEND — COMPARAISON EXPLICITE (priorité absolue)
-    msg = normalize(req.message)
-    if any(
-        k in msg
-        for k in [
-            "difference entre",
-            "différence entre",
-            "comparaison",
-            "compare",
-            "comparé",
-            "comparaison entre",
-            "évolution entre",
-            "évolution par rapport à",
-        ]
-    ):
-        if "semaine" in msg and "precedent" in msg:
-            decision = {
-                "type": "COMPARE_PERIODS",
-                "metric": decision.get("metric") or "DISTANCE",
-                "left": "CURRENT_WEEK",
-                "right": "PREVIOUS_WEEK",
-            }
-            print("🛡️ OVERRIDE BACKEND → COMPARAISON SEMAINE")
 
-    # 🛡️ VERROU BACKEND — MOIS NOMMÉ (octobre, mars, etc.)
-    msg = normalize(req.message)
+    decision = apply_backend_overrides(req.message, decision)
 
-    # 🛡️ VERROU BACKEND — RÉSUMÉ DE SEMAINE
-    if (
-        any(k in msg for k in ["resume", "bilan", "synthese", "stat"])
-        and "semaine" in msg
-    ):
-        decision = {
-            "type": "ANSWER_NOW",
-            "answer_mode": "FACTUAL",
-            "metric": "DISTANCE",  # ou None si tu veux un résumé multi-métriques plus tard
-        }
-        print("🛡️ OVERRIDE BACKEND → résumé de semaine détecté")
-
-    # 🛡️ VERROU BACKEND — MOIS NOMMÉ (mot entier uniquement)
-    for month_name, month_num in MONTHS.items():
-        pattern = rf"\b{month_name}\b"
-        if re.search(pattern, msg):
-            decision = {
-                "type": "REQUEST_MONTH",
-                "month": month_num,
-                "year": None,
-                "metric": decision.get("metric") or "DISTANCE",
-            }
-            print(f"🛡️ OVERRIDE BACKEND → mois détecté : {month_name}")
-            break
-
-    # 🛡️ VERROU BACKEND — semaine précédente = REQUEST_WEEK
-    msg = normalize(req.message)
-
-    if decision.get("type") != "COMPARE_PERIODS":
-        if any(
-            k in msg
-            for k in [
-                "semaine precedente",
-                "semaine derniere",
-                "la semaine d'avant",
-                "semaine d’avant",
-                "precedente",
-            ]
-        ):
-            decision = {
-                "type": "REQUEST_WEEK",
-                "offset": -1,
-                "metric": decision.get("metric") or "DISTANCE",
-            }
-            print("🛡️ OVERRIDE BACKEND → semaine précédente = REQUEST_WEEK (-1)")
-
-    # 🛡️ VERROU BACKEND — cette semaine = FACTUAL
-    if decision.get("type") == "ANSWER_NOW" and (
-        "cette semaine" in req.message.lower()
-        or "semaine en cours" in req.message.lower()
-        or "semaine actuelle" in req.message.lower()
-    ):
-        decision = {
-            "type": "ANSWER_NOW",
-            "answer_mode": "FACTUAL",
-            "metric": decision.get("metric") or "DISTANCE",
-        }
-        print("🛡️ OVERRIDE BACKEND → cette semaine = ANSWER_NOW (FACTUAL)")
-
-    decision_type = decision.get("type", "ANSWER_NOW")
-    answer_mode = decision.get("answer_mode")
-    metric = decision.get("metric") or "DISTANCE"
-    offset = decision.get("offset")
-
-    print("\n================= ROUTING =================")
-    print("🧠 DECISION TYPE :", decision_type)
-    print("🧠 ANSWER MODE   :", answer_mode)
-    print("🧠 METRIC        :", metric)
-    print("🧠 OFFSET        :", offset)
+    print("\n================= DECISION =================")
+    print("🧠 DECISION :", decision)
 
     # ======================================================
-    # 🟠 REQUEST_WEEK
+    # 🧭 ROUTING CENTRALISÉ
     # ======================================================
-    if decision_type == "REQUEST_WEEK":
-        offset = int(offset if offset is not None else -1)
-
-        today = date.today()
-        week_start = today - timedelta(days=today.weekday())
-        start = week_start + timedelta(days=7 * offset)
-        end = start + timedelta(days=7)
-
-        print("📆 TARGET_WEEK :", start, "→", end)
-
-        if (
-            req.snapshot.period.start == start.isoformat()
-            and req.snapshot.period.end == end.isoformat()
-        ):
-            print("✅ SEMAINE DÉJÀ CHARGÉE → FACTUAL")
-            return factual_response(req.snapshot, metric)
-
-        return {
-            "type": "REQUEST_SNAPSHOT",
-            "period": {"start": start.isoformat(), "end": end.isoformat()},
-            "meta": {"metric": metric},
-        }
-
-    # ======================================================
-    # 🟠 REQUEST_MONTH (ABSOLU)
-    # ======================================================
-    if decision_type == "REQUEST_MONTH":
-        month = decision.get("month")
-        raw_year = decision.get("year")
-
-        if month is None:
-            return {
-                "reply": (
-                    "Je n’ai pas compris quel mois précis tu voulais. "
-                    "Peux-tu préciser (ex: 'novembre 2025') ?"
-                )
-            }
-
-        month = int(month)
-        today = date.today()
-
-        if isinstance(raw_year, int):
-            year = raw_year
-
-            if year > today.year or (year == today.year and month > today.month):
-                year = today.year - 1
-        else:
-            # Mois sans année → dernier mois écoulé
-            if month < today.month:
-                year = today.year
-            else:
-                year = today.year - 1
-
-        start = date(year, month, 1)
-        end = date(year, month, calendar.monthrange(year, month)[1])
-
-        if (
-            req.snapshot.period.start == start.isoformat()
-            and req.snapshot.period.end == end.isoformat()
-        ):
-            print("✅ MOIS DÉJÀ CHARGÉ → FACTUAL")
-            return factual_response(req.snapshot, metric)
-
-        return {
-            "type": "REQUEST_SNAPSHOT",
-            "period": {"start": start.isoformat(), "end": end.isoformat()},
-            "meta": {"metric": metric},
-        }
-
-    # ======================================================
-    # 🟠 REQUEST_MONTH_RELATIVE
-    # ======================================================
-    if decision_type == "REQUEST_MONTH_RELATIVE":
-        msg = normalize(req.message)
-
-        if "ce mois" in msg:
-            offset = 0
-        elif "mois dernier" in msg:
-            offset = -1
-        else:
-            offset = int(offset or -1)
-
-        today = date.today()
-        target_month = today.month + offset
-        target_year = today.year
-
-        while target_month < 1:
-            target_month += 12
-            target_year -= 1
-        while target_month > 12:
-            target_month -= 12
-            target_year += 1
-
-        start = date(target_year, target_month, 1)
-        end = date(
-            target_year,
-            target_month,
-            calendar.monthrange(target_year, target_month)[1],
-        )
-
-        if (
-            req.snapshot.period.start == start.isoformat()
-            and req.snapshot.period.end == end.isoformat()
-        ):
-            print("✅ MOIS RELATIF DÉJÀ CHARGÉ → FACTUAL")
-            return factual_response(req.snapshot, metric)
-
-        return {
-            "type": "REQUEST_SNAPSHOT",
-            "period": {"start": start.isoformat(), "end": end.isoformat()},
-            "meta": {"metric": metric},
-        }
-
-    # ======================================================
-    # 🟣 COMPARE_PERIODS → DEMANDE SNAPSHOTS
-    # ======================================================
-    if decision_type == "COMPARE_PERIODS":
-        left_start, left_end = period_to_dates(decision["left"])
-        right_start, right_end = period_to_dates(decision["right"])
-
-        LABELS = {
-            "CURRENT_WEEK": "cette semaine",
-            "PREVIOUS_WEEK": "la semaine dernière",
-            "CURRENT_MONTH": "ce mois-ci",
-            "PREVIOUS_MONTH": "le mois dernier",
-        }
-
-        return {
-            "type": "REQUEST_SNAPSHOT_BATCH",
-            "snapshots": {
-                "left": {
-                    "start": left_start.isoformat(),
-                    "end": left_end.isoformat(),
-                },
-                "right": {
-                    "start": right_start.isoformat(),
-                    "end": right_end.isoformat(),
-                },
-            },
-            "meta": {
-                "metric": metric,
-                "left_label": LABELS.get(decision["left"], "période 1"),
-                "right_label": LABELS.get(decision["right"], "période 2"),
-            },
-        }
-
-    # ======================================================
-    # 🟢 ANSWER_NOW
-    # ======================================================
-    if answer_mode == "FACTUAL":
-        return factual_response(req.snapshot, metric)
-
-    return {"reply": answer_with_snapshot(req.message, req.snapshot)}
+    return route_decision(req, decision)

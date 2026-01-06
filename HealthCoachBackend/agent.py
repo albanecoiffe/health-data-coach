@@ -17,7 +17,7 @@ Tu es un moteur de décision STRICT pour une application de suivi de course à p
 Tu dois retourner UNE décision JSON valide, et RIEN d'autre.
 
 ========================================
-1️⃣ PRIORITÉ ABSOLUE — SMALL TALK
+1 - PRIORITÉ ABSOLUE — SMALL TALK
 ========================================
 
 - Si le message est une salutation ou une phrase vague
@@ -36,7 +36,7 @@ Retourne EXACTEMENT :
     ALORS ce n’est PAS du small talk.
 
 ========================================
-2️⃣ CHANGEMENT DE PÉRIODE — SEMAINES
+2 - CHANGEMENT DE PÉRIODE — SEMAINES
 ========================================
 
 Si la question contient :
@@ -69,7 +69,7 @@ Retourne :
 }}
 
 ========================================
-3️⃣ CHANGEMENT DE PÉRIODE — MOIS RELATIFS (PRIORITÉ ABSOLUE)
+3 - CHANGEMENT DE PÉRIODE — MOIS RELATIFS (PRIORITÉ ABSOLUE)
 ========================================
 
 Si la question contient EXACTEMENT :
@@ -117,7 +117,7 @@ ALORS tu DOIS retourner :
 
 
 ========================================
-4️⃣ MOIS ABSOLU (EXPLICITE SEULEMENT)
+4 - MOIS ABSOLU (EXPLICITE SEULEMENT)
 ========================================
 
 Si (et seulement si) un mois explicite est mentionné
@@ -132,7 +132,52 @@ Retourne :
 }}
 
 ========================================
-5️⃣ ANSWER_NOW FACTUEL
+5 - CHANGEMENT DE PÉRIODE — ANNÉES RELATIVES
+========================================
+
+Si la question contient EXACTEMENT :
+- "l'année dernière"
+- "annee derniere"
+- "l’an dernier"
+- "an dernier"
+- "l’année passée"
+- "annee passee"
+
+ALORS tu DOIS retourner EXACTEMENT :
+{{
+  "type": "REQUEST_YEAR_RELATIVE",
+  "offset": -1,
+  "metric": "<métrique détectée>"
+}}
+
+Tu n’as PAS le droit :
+- de retourner REQUEST_MONTH_RELATIVE
+- de retourner REQUEST_MONTH
+- de retourner REQUEST_WEEK
+
+Si la question contient une expression du type :
+- "il y a X ans"
+- "il y a X années"
+où X est un nombre entier strictement positif,
+
+ALORS tu DOIS retourner EXACTEMENT :
+{{
+   "type": "REQUEST_YEAR_RELATIVE",
+  "offset": -X,
+  "metric": "<métrique détectée>"
+}}
+
+Exemples :
+- "il y a 2 ans" → offset = -2
+- "il y a 5 ans" → offset = -5
+Tu n’as PAS le droit :
+- de retourner REQUEST_MONTH_RELATIVE
+- de retourner REQUEST_MONTH
+- de retourner REQUEST_WEEK
+- de retourner ANSWER_NOW
+
+========================================
+6 - ANSWER_NOW FACTUEL
 ========================================
 
 Si la question demande une valeur mesurable
@@ -146,7 +191,7 @@ Retourne :
 }}
 
 ========================================
-6️⃣ PAR DÉFAUT
+7 - PAR DÉFAUT
 ========================================
 
 Retourne :
@@ -192,7 +237,7 @@ MÉTRIQUES POSSIBLES
 DISTANCE | DURATION | SESSIONS | AVG_HR | PACE | ELEVATION | LOAD | UNKNOWN
 
 ========================================
-2️⃣ COMPARAISONS (PRIORITÉ HAUTE)
+8 - COMPARAISONS (PRIORITÉ HAUTE)
 ========================================
 
 Si la question compare deux périodes
@@ -211,7 +256,7 @@ Exemples :
 "Est-ce que j’ai couru plus que la semaine dernière ?"
 →
 {{
-        "type": "COMPARE_PERIODS",
+   "type": "COMPARE_PERIODS",
   "metric": "DISTANCE",
   "left": "CURRENT_WEEK",
   "right": "PREVIOUS_WEEK"
@@ -220,7 +265,7 @@ Exemples :
 "Est-ce que je fais plus de séances ce mois-ci ?"
 →
 {{
-        "type": "COMPARE_PERIODS",
+   "type": "COMPARE_PERIODS",
   "metric": "SESSIONS",
   "left": "CURRENT_MONTH",
   "right": "PREVIOUS_MONTH"
@@ -230,7 +275,7 @@ Si la question contient :
 - "ce mois par rapport au mois dernier"
 →
 {{
-        "type": "COMPARE_PERIODS",
+   "type": "COMPARE_PERIODS",
   "metric": "<metric>",
   "left": "CURRENT_MONTH",
   "right": "PREVIOUS_MONTH"
@@ -245,6 +290,53 @@ Si la question contient :
   "left": "LAST_2_WEEKS",
   "right": "PREVIOUS_2_WEEKS"
 }}
+
+Si la question compare deux années explicites
+(ex: "2025 avec 2024", "année 2023 par rapport à 2022") :
+
+Retourne :
+{{
+  "type": "COMPARE_PERIODS",
+  "metric": "<metric>",
+  "left": "YEAR_2025",
+  "right": "YEAR_2024"
+}}
+
+
+========================================
+9 - BILAN / RÉSUMÉ (PRIORITÉ HAUTE)
+========================================
+
+Si la question contient une demande de synthèse globale avec:
+- "bilan"
+- "résumé"
+- "resume"
+- "récap"
+- "recap"
+- "synthèse"
+- "synthese"
+- "vue d’ensemble"
+- "vue d'ensemble"
+
+CAS 1 — une année explicite (YYYY) est mentionnée :
+Retourne STRICTEMENT :
+{{
+        "type": "REQUEST_YEAR",
+  "year": YYYY
+}}
+
+CAS 2 — aucune période explicite :
+Retourne STRICTEMENT :
+{{
+        "type": "SUMMARY"
+}}
+
+RÈGLES ABSOLUES :
+- SUMMARY ne contient JAMAIS de year
+- SUMMARY ne contient JAMAIS d’offset
+- Si une période est mentionnée, SUMMARY est INTERDIT
+- Tu ne retournes JAMAIS SUMMARY avec une période
+
 
 ========================================
 QUESTION
@@ -304,8 +396,7 @@ Question :
 
 
 def factual_response(snapshot, metric: str) -> dict:
-    start = snapshot.period.start
-    end = snapshot.period.end
+    start, end = format_period_for_display(snapshot.period.start, snapshot.period.end)
 
     # Aucune séance
     if snapshot.totals.sessions == 0:
@@ -361,6 +452,16 @@ def factual_response(snapshot, metric: str) -> dict:
     }
 
 
+def format_period_for_display(start_iso: str, end_iso: str) -> tuple[str, str]:
+    """
+    start inclus
+    end exclus → affichage end - 1 jour
+    """
+    start = date.fromisoformat(start_iso)
+    end = date.fromisoformat(end_iso) - timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
 def safe_parse_json(raw: str) -> dict | None:
     try:
         start = raw.index("{")
@@ -374,68 +475,147 @@ def comparison_response_agent(
     message: str,
     metric: str,
     delta: dict,
-    left_label: str,
-    right_label: str,
+    left_period: tuple[str, str],
+    right_period: tuple[str, str],
+    period_context: str | None = None,
 ) -> str:
+    """
+    Génère une comparaison STRICTEMENT contrôlée.
+    Aucune mention de période individuelle.
+    Aucune interprétation.
+    """
+
+    # Détermination du sens AVANT le LLM
+    if delta["distance_km"] > 0:
+        trend = "PLUS"
+    elif delta["distance_km"] < 0:
+        trend = "MOINS"
+    else:
+        trend = "STABLE"
+
     prompt = f"""
-Tu es un coach de course à pied clair, précis et fiable.
+    Tu es un coach de course à pied humain, clair et naturel.
 
-Tu analyses une COMPARAISON entre deux périodes :
-{left_label} vs {right_label}
+    Tu compares DEUX périodes strictement définies par des dates.
 
-Tu disposes UNIQUEMENT des écarts suivants (ce ne sont PAS des totaux) :
-- Distance : {delta["distance_km"]} km
-- Durée : {delta["duration_min"]} minutes
-- Séances : {delta["sessions"]}
+    PÉRIODES À COMPARER :
+    - Période A : du {left_period[0]} au {left_period[1]}
+    - Période B : du {right_period[0]} au {right_period[1]}
 
-INTERPRÉTATION DES CHIFFRES :
-- Valeur positive → PLUS
-- Valeur négative → MOINS
-- Valeur proche de zéro → STABLE
+    VERDICT FOURNI PAR LE SYSTÈME :
+    - trend = UP     → la période B est plus élevée
+    - trend = DOWN   → la période A est plus élevée
+    - trend = STABLE → volumes très proches
 
-RÈGLES ABSOLUES :
-- Tu n’inventes AUCUN chiffre
-- Tu n’arrondis PAS autrement que ce qui est fourni
-- Tu n’expliques PAS comment les chiffres sont calculés
-- Tu ne fais AUCUNE supposition
-- Tu n’emploies JAMAIS une formulation contradictoire
-  (ex: "moins de temps" si la durée est positive)
+    Trend : {delta["trend"]}
 
-ADAPTATION À LA QUESTION :
-- Si la question est une QUESTION FERMÉE (oui / non),
-  commence par "Oui" ou "Non", puis explique.
-- Si la question est une DEMANDE DE COMPARAISON,
-  commence par un CONSTAT GLOBAL, sans "oui" ni "non".
+    ÉCARTS (valeurs absolues, PAS des totaux) :
+    - Distance : {delta["distance_km"]} km
+    - Durée : {delta["duration_min"]} minutes
+    - Séances : {delta["sessions"]}
 
-STRUCTURE GÉNÉRALE :
-- 1 phrase de réponse principale adaptée à la question
-- 1 phrase qui précise distance, durée et séances
+    ━━━━━━━━━━━━━━━━━━━━━━
+    RÈGLES ABSOLUES
+    ━━━━━━━━━━━━━━━━━━━━━━
+    - Tu n’affiches JAMAIS de signe + ou -
+    - Tu n’expliques JAMAIS comment les chiffres sont calculés
+    - Tu ne fais AUCUNE supposition
+    - Tu ne donnes AUCUN avis subjectif
+    - Tu n’emploies PAS de labels humains (pas “cette semaine”, “ce mois-ci”, etc.)
+    - Tu parles UNIQUEMENT à partir des dates fournies
 
-EXEMPLES À SUIVRE STRICTEMENT :
+    - Tu n’expliques JAMAIS pourquoi une période est plus élevée
+    - Tu ne fais JAMAIS de note, remarque ou méta-commentaire
+    - Tu n’écris JAMAIS :
+    "Note :", "À noter", "Cela signifie que", "Le trend est"
+    - Tu ne mentionnes JAMAIS A ou B comme concepts
+    - Tu parles uniquement avec les dates
 
-Exemple A — Question fermée :
-Question : "Ai-je couru plus cette semaine que la semaine dernière ?"
-Distance = +5 km, Durée = +30 min, Séances = +1
-→
-"Oui, tu as couru davantage. Tu as parcouru environ 5 km de plus, passé 30 minutes supplémentaires à courir et ajouté une séance."
+    ━━━━━━━━━━━━━━━━━━━━━━
+    STRUCTURE OBLIGATOIRE
+    ━━━━━━━━━━━━━━━━━━━━━━
+    1) Une phrase qui cite clairement les deux périodes
+    2) Une phrase qui indique quelle période est la plus élevée (ou stable)
+    3) Une phrase qui précise distance, durée et séances
 
-Exemple B — Question fermée :
-Distance = -3 km, Durée = -20 min, Séances = -1
-→
-"Non, ton volume est un peu plus bas. Tu as couru environ 3 km de moins, passé 20 minutes de moins à courir et fait une séance en moins."
+    Chaque phrase doit être différente.
+    Style fluide, naturel, humain.
 
-Exemple C — Demande de comparaison :
-Question : "Compare ce mois avec le mois dernier"
-Distance = -95.9 km, Durée = -634 min, Séances = -12
-→
-"Ce mois-ci, ton volume est nettement plus bas. Tu as couru environ 95.9 km de moins, passé 634 minutes de moins à courir et effectué 12 séances en moins."
+    ━━━━━━━━━━━━━━━━━━━━━━
+    EXEMPLES À IMITER
+    ━━━━━━━━━━━━━━━━━━━━━━
 
-Exemple D — Situation stable :
-Distance = +0.5 km, Durée = +2 min, Séances = 0
-→
-"C’est très proche de la période précédente, avec seulement un léger surplus de distance et de temps, et un nombre de séances identique."
+    Exemple 1 — comparaison de semaines :
+    "Entre la période du 01.03.2025 au 08.03.2025 et celle du 08.03.2025 au 15.03.2025, le volume global est plus élevé sur la seconde période. 
+    Tu as couru 12 km de plus, passé 85 minutes supplémentaires à courir et effectué 2 séances en plus."
 
-QUESTION UTILISATEUR :
-"{message}"
-"""
+    Exemple 2 — comparaison de mois :
+    "En comparant la période du 01.02.2025 au 01.03.2025 avec celle du 01.03.2025 au 01.04.2025, la seconde période ressort comme la plus chargée. 
+    La distance est supérieure de 48 km, avec 310 minutes de course en plus et 6 séances supplémentaires."
+
+    Exemple 3 — comparaison d’années :
+    "Entre la période du 01.01.2024 au 01.01.2025 et celle du 01.01.2025 au 01.01.2026, le volume d’entraînement est plus élevé sur la seconde période. 
+    Cela représente 581 km de plus, 3 832 minutes supplémentaires et 53 séances en plus."
+
+    Exemple 4 — volumes stables :
+    "Les volumes sont très proches entre la période du 01.06.2025 au 01.07.2025 et celle du 01.07.2025 au 01.08.2025. 
+    Les écarts sont limités, avec seulement 2 km, 15 minutes et une séance d’écart."
+
+    ━━━━━━━━━━━━━━━━━━━━━━
+    QUESTION UTILISATEUR :
+    "{message}"
+    """
     return call_ollama(prompt)
+
+
+def summary_response(snapshot) -> dict:
+    start, end = format_period_for_display(snapshot.period.start, snapshot.period.end)
+
+    if snapshot.totals.sessions == 0:
+        return {
+            "reply": f"Aucune séance enregistrée sur la période du {start} au {end}."
+        }
+
+    distance = round(snapshot.totals.distance_km, 1)
+    duration_min = round(snapshot.totals.duration_min)
+    hours = duration_min // 60
+    minutes = duration_min % 60
+    sessions = snapshot.totals.sessions
+    elevation = round(snapshot.totals.elevation_m)
+
+    # ❤️ Zones cardiaques
+    zones_text = []
+    zones = getattr(snapshot, "zones_percent", None)
+
+    if isinstance(zones, dict) and zones:
+        for z in ["z1", "z2", "z3", "z4", "z5"]:
+            val = zones.get(z)
+            if isinstance(val, (int, float)) and val > 0:
+                zones_text.append(f"{z.upper()} : {round(val * 100)}%")
+
+    zones_str = ", ".join(zones_text) if zones_text else "non disponibles"
+
+    # 🏅 Plus longue sortie
+    longest = getattr(snapshot, "longest_run_km", None)
+
+    longest_str = (
+        f"{round(longest, 1)} km"
+        if isinstance(longest, (int, float)) and longest > 0
+        else "non disponible"
+    )
+
+    return {
+        "reply": (
+            f"📊 Bilan de la période {start} → {end}\n\n"
+            f"🏃 Distance totale : {distance} km\n"
+            f"⏱️ Temps total : {hours}h{minutes:02d}\n"
+            f"📆 Séances : {sessions}\n"
+            f"⛰️ D+ : {elevation} m\n\n"
+            f"❤️ Répartition cardiaque : {zones_str}\n"
+            f"🏅 Plus longue sortie : {longest_str}"
+        )
+    }
+
+
+def get_distance(run):
+    return getattr(run, "distance_km", None) or getattr(run, "distanceKm", None) or 0
