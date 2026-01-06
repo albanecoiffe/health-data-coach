@@ -6,6 +6,14 @@ from agent import factual_response, summary_response, answer_with_snapshot
 from schemas import ChatRequest
 from services.periods import period_to_dates
 from services.comparisons import infer_period_context_from_keys
+from fastapi import HTTPException
+
+LABELS = {
+    "CURRENT_WEEK": "cette semaine",
+    "PREVIOUS_WEEK": "la semaine dernière",
+    "CURRENT_MONTH": "ce mois-ci",
+    "PREVIOUS_MONTH": "le mois dernier",
+}
 
 MONTHS = {
     "janvier": 1,
@@ -56,10 +64,17 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     return decision
 
 
-def resolve_period_from_decision(decision: dict, message: str):
+def resolve_period_from_decision(
+    decision: dict,
+    message: str,
+    snapshot_start_iso: str | None = None,
+):
     today = date.today()
     msg = normalize(message)
 
+    # ======================
+    # 📆 SEMAINE
+    # ======================
     if decision["type"] == "REQUEST_WEEK":
         offset = int(decision.get("offset", -1))
         week_start = today - timedelta(days=today.weekday())
@@ -67,32 +82,22 @@ def resolve_period_from_decision(decision: dict, message: str):
         end = start + timedelta(days=7)
         return start, end
 
+    # ======================
+    # 📆 MOIS / SUMMARY
+    # ======================
     if decision["type"] in ["REQUEST_MONTH", "REQUEST_MONTH_RELATIVE", "SUMMARY"]:
-        offset = 0
-
-        if "mois dernier" in msg:
-            offset = -1
-        elif "ce mois" in msg:
-            offset = 0
-        elif decision.get("month"):
-            month = decision["month"]
-            raw_year = decision.get("year")
-
-            if raw_year:
-                year = raw_year
-            else:
-                # dernier mois écoulé
-                if month < today.month:
-                    year = today.year
-                else:
-                    year = today.year - 1
-
-            start = date(year, month, 1)
-            days = calendar.monthrange(year, month)[1]
+        # 🔑 CAS CRITIQUE :
+        # Si un snapshot mensuel est déjà fourni,
+        # on l'utilise DIRECTEMENT comme vérité.
+        if snapshot_start_iso:
+            snapshot_start = date.fromisoformat(snapshot_start_iso)
+            start = date(snapshot_start.year, snapshot_start.month, 1)
+            days = calendar.monthrange(start.year, start.month)[1]
             end = start + timedelta(days=days)
             return start, end
 
-        # mois relatif
+        # 🔵 SINON : calcul normal depuis today
+        offset = int(decision.get("offset", 0))
         target_month = today.month + offset
         target_year = today.year
 
@@ -106,7 +111,6 @@ def resolve_period_from_decision(decision: dict, message: str):
         start = date(target_year, target_month, 1)
         days = calendar.monthrange(target_year, target_month)[1]
         end = start + timedelta(days=days)
-
         return start, end
 
     return None, None
@@ -123,40 +127,57 @@ def route_decision(req: ChatRequest, decision: dict):
     decision_type = decision.get("type", "ANSWER_NOW")
     metric = decision.get("metric") or "DISTANCE"
 
+    # ======================================================
+    # 📆 PÉRIODES (SEMAINE / MOIS / SUMMARY)
+    # ======================================================
     if decision_type in [
         "REQUEST_WEEK",
         "REQUEST_MONTH",
         "REQUEST_MONTH_RELATIVE",
         "SUMMARY",
     ]:
-        start, end = resolve_period_from_decision(decision, req.message)
+        # ⚠️ IMPORTANT :
+        # snapshot_start_iso NE DOIT ÊTRE PASSÉ
+        # QUE SI ON VEUT RÉPONDRE, PAS RECALCULER
+        start, end = resolve_period_from_decision(
+            decision,
+            req.message,
+            snapshot_start_iso=req.snapshot.period.start
+            if decision_type != "REQUEST_MONTH_RELATIVE"
+            else None,
+        )
 
         if start and snapshot_matches_period(req.snapshot, start, end):
             if decision_type == "SUMMARY":
                 return summary_response(req.snapshot)
+
             return factual_response(req.snapshot, metric)
 
         return {
             "type": "REQUEST_SNAPSHOT",
-            "period": {"start": start.isoformat(), "end": end.isoformat()},
+            "period": {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+            },
             "meta": {"metric": metric},
         }
 
+    # ======================================================
+    # 🔁 COMPARAISONS
+    # ======================================================
     if decision_type == "COMPARE_PERIODS":
         return build_compare_request(decision, metric)
 
+    # ======================================================
+    # 📊 FACTUEL
+    # ======================================================
     if decision.get("answer_mode") == "FACTUAL":
         return factual_response(req.snapshot, metric)
 
+    # ======================================================
+    # 💬 FALLBACK
+    # ======================================================
     return {"reply": answer_with_snapshot(req.message, req.snapshot)}
-
-
-LABELS = {
-    "CURRENT_WEEK": "cette semaine",
-    "PREVIOUS_WEEK": "la semaine dernière",
-    "CURRENT_MONTH": "ce mois-ci",
-    "PREVIOUS_MONTH": "le mois dernier",
-}
 
 
 def build_compare_request(decision: dict, metric: str):
