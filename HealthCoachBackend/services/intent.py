@@ -73,32 +73,31 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
                 "year": extract_year(msg),
                 "metric": decision.get("metric") or "DISTANCE",
             }
-    if is_summary:
-        if (
-            "mois dernier" in msg
-            or "le mois dernier" in msg
-            or "mois precedente" in msg
-            or "le mois precedente" in msg
-            or "mois précédente" in msg
-            or "le mois précédente" in msg
-        ):
-            return {
-                "type": "REQUEST_MONTH_RELATIVE",
-                "offset": -1,
-                "metric": decision.get("metric") or "DISTANCE",
-            }
+    if (
+        "mois dernier" in msg
+        or "le mois dernier" in msg
+        or "mois precedente" in msg
+        or "le mois precedente" in msg
+        or "mois précédente" in msg
+        or "le mois précédente" in msg
+    ):
+        return {
+            "type": "REQUEST_MONTH_RELATIVE",
+            "offset": -1,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
 
-        if (
-            "ce mois" in msg
-            or "ce mois-ci" in msg
-            or "ce mois ci" in msg
-            or "le mois en cours" in msg
-        ):
-            return {
-                "type": "REQUEST_MONTH_RELATIVE",
-                "offset": 0,
-                "metric": decision.get("metric") or "DISTANCE",
-            }
+    if (
+        "ce mois" in msg
+        or "ce mois-ci" in msg
+        or "ce mois ci" in msg
+        or "le mois en cours" in msg
+    ):
+        return {
+            "type": "REQUEST_MONTH_RELATIVE",
+            "offset": 0,
+            "metric": decision.get("metric") or "DISTANCE",
+        }
 
     # ======================================================
     # ANNÉE RELATIVE (cette année, l’an dernier, etc.)
