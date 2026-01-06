@@ -4,7 +4,8 @@ from datetime import date, timedelta
 import calendar
 from agent import factual_response, summary_response, answer_with_snapshot
 from schemas import ChatRequest
-
+from services.periods import period_to_dates
+from services.comparisons import infer_period_context_from_keys
 
 MONTHS = {
     "janvier": 1,
@@ -150,8 +151,6 @@ def route_decision(req: ChatRequest, decision: dict):
     return {"reply": answer_with_snapshot(req.message, req.snapshot)}
 
 
-from services.periods import period_to_dates
-
 LABELS = {
     "CURRENT_WEEK": "cette semaine",
     "PREVIOUS_WEEK": "la semaine dernière",
@@ -169,8 +168,21 @@ def build_compare_request(decision: dict, metric: str):
     left_key = decision["left"]
     right_key = decision["right"]
 
+    # 🔑 Contexte temporel (WEEK / MONTH / YEAR / None)
+    period_context = infer_period_context_from_keys(left_key)
+
+    # 📅 Résolution des périodes
     left_start, left_end = period_to_dates(left_key)
     right_start, right_end = period_to_dates(right_key)
+
+    meta = {
+        "metric": metric,
+        "left_label": LABELS.get(left_key, "période 1"),
+        "right_label": LABELS.get(right_key, "période 2"),
+    }
+
+    if period_context is not None:
+        meta["period_context"] = period_context
 
     return {
         "type": "REQUEST_SNAPSHOT_BATCH",
@@ -184,11 +196,7 @@ def build_compare_request(decision: dict, metric: str):
                 "end": right_end.isoformat(),
             },
         },
-        "meta": {
-            "metric": metric,
-            "left_label": LABELS.get(left_key, "période 1"),
-            "right_label": LABELS.get(right_key, "période 2"),
-        },
+        "meta": meta,
     }
 
 

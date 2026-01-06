@@ -50,6 +50,22 @@ def period_to_dates(period_key: str):
         return start, end
 
     # ======================
+    # 📆 MOIS ABSOLUS (ex: MONTH_2025-09)
+    # ======================
+    match = re.match(r"MONTH_(\d{4})-(\d{2})$", period_key)
+    if match:
+        year = int(match.group(1))
+        month = int(match.group(2))
+
+        if month < 1 or month > 12:
+            raise ValueError(f"Mois invalide : {period_key}")
+
+        start = date(year, month, 1)
+        days_in_month = calendar.monthrange(year, month)[1]
+        end = start + timedelta(days=days_in_month)
+        return start, end
+
+    # ======================
     # 📆 PÉRIODES GLISSANTES
     # ======================
     if period_key == "LAST_2_WEEKS":
@@ -60,6 +76,31 @@ def period_to_dates(period_key: str):
     if period_key == "PREVIOUS_2_WEEKS":
         end = today - timedelta(days=14)
         start = end - timedelta(days=14)
+        return start, end
+
+    # ======================
+    # 📆 ANNÉES ABSOLUES
+    # ======================
+    match = re.match(r"YEAR_(\d{4})$", period_key)
+    if match:
+        year = int(match.group(1))
+        start = date(year, 1, 1)
+        end = date(year + 1, 1, 1)
+        return start, end
+
+    # ======================
+    # 📆 ANNÉES RELATIVES
+    # ======================
+    if period_key == "CURRENT_YEAR":
+        year = today.year
+        start = date(year, 1, 1)
+        end = date(year + 1, 1, 1)
+        return start, end
+
+    if period_key == "PREVIOUS_YEAR":
+        year = today.year - 1
+        start = date(year, 1, 1)
+        end = date(year + 1, 1, 1)
         return start, end
 
     # ======================

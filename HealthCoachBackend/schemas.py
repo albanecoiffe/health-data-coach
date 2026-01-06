@@ -68,11 +68,5 @@ class SnapshotBatchPayload(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     snapshot: Snapshot
-
     snapshots: Optional[SnapshotBatchPayload] = None
     meta: Optional[Dict[str, str]] = None
-
-
-ChatRequest.model_rebuild()
-SnapshotBatchPayload.model_rebuild()
-Snapshot.model_rebuild()

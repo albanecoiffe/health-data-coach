@@ -256,13 +256,50 @@ class ChatViewModel: ObservableObject {
 
         await withCheckedContinuation { continuation in
 
+            // ======================================================
+            // 🔑 CAS ANNUEL
+            // ======================================================
+            if meta["period_context"] == "YEAR" {
+
+                let calendar = Calendar.current
+                let leftYear = calendar.component(.year, from: leftStart)
+                let rightYear = calendar.component(.year, from: rightStart)
+
+                healthManager.makeYearSnapshot(year: leftYear) { leftSnapshot in
+                    self.healthManager.makeYearSnapshot(year: rightYear) { rightSnapshot in
+
+                        Task {
+                            let payload = ChatRequest(
+                                message: message,
+                                snapshot: leftSnapshot,   // requis par FastAPI
+                                snapshots: SnapshotPair(
+                                    left: leftSnapshot,
+                                    right: rightSnapshot
+                                ),
+                                meta: meta
+                            )
+
+                            let decoded = await self.sendPayloadRaw(payload)
+                            continuation.resume(
+                                returning: decoded?.reply ?? "Erreur comparaison annuelle."
+                            )
+                        }
+                    }
+                }
+
+                return
+            }
+
+            // ======================================================
+            // 🔵 CAS SEMAINE / MOIS (inchangé)
+            // ======================================================
             healthManager.makeSnapshot(from: leftStart, to: leftEnd) { leftSnapshot in
                 self.healthManager.makeSnapshot(from: rightStart, to: rightEnd) { rightSnapshot in
 
                     Task {
                         let payload = ChatRequest(
                             message: message,
-                            snapshot: leftSnapshot,   // 🔑 snapshot requis par FastAPI
+                            snapshot: leftSnapshot,   // requis par FastAPI
                             snapshots: SnapshotPair(
                                 left: leftSnapshot,
                                 right: rightSnapshot
@@ -271,7 +308,6 @@ class ChatViewModel: ObservableObject {
                         )
 
                         let decoded = await self.sendPayloadRaw(payload)
-
                         continuation.resume(
                             returning: decoded?.reply ?? "Erreur comparaison."
                         )
@@ -280,7 +316,4 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
-
-
-
 }

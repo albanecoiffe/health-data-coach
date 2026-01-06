@@ -246,6 +246,18 @@ Si la question contient :
   "right": "PREVIOUS_2_WEEKS"
 }}
 
+Si la question compare deux années explicites
+(ex: "2025 avec 2024", "année 2023 par rapport à 2022") :
+
+Retourne :
+{{
+  "type": "COMPARE_PERIODS",
+  "metric": "<metric>",
+  "left": "YEAR_2025",
+  "right": "YEAR_2024"
+}}
+
+
 ========================================
 8 - BIS — BILAN / RÉSUMÉ (PRIORITÉ HAUTE)
 ========================================
@@ -335,8 +347,7 @@ Question :
 
 
 def factual_response(snapshot, metric: str) -> dict:
-    start = snapshot.period.start
-    end = snapshot.period.end
+    start, end = format_period_for_display(snapshot.period.start, snapshot.period.end)
 
     # Aucune séance
     if snapshot.totals.sessions == 0:
@@ -392,6 +403,16 @@ def factual_response(snapshot, metric: str) -> dict:
     }
 
 
+def format_period_for_display(start_iso: str, end_iso: str) -> tuple[str, str]:
+    """
+    start inclus
+    end exclus → affichage end - 1 jour
+    """
+    start = date.fromisoformat(start_iso)
+    end = date.fromisoformat(end_iso) - timedelta(days=1)
+    return start.isoformat(), end.isoformat()
+
+
 def safe_parse_json(raw: str) -> dict | None:
     try:
         start = raw.index("{")
@@ -405,70 +426,96 @@ def comparison_response_agent(
     message: str,
     metric: str,
     delta: dict,
-    left_label: str,
-    right_label: str,
+    left_period: tuple[str, str],
+    right_period: tuple[str, str],
+    period_context: str | None = None,
 ) -> str:
+    """
+    Génère une comparaison STRICTEMENT contrôlée.
+    Aucune mention de période individuelle.
+    Aucune interprétation.
+    """
+
+    # Détermination du sens AVANT le LLM
+    if delta["distance_km"] > 0:
+        trend = "PLUS"
+    elif delta["distance_km"] < 0:
+        trend = "MOINS"
+    else:
+        trend = "STABLE"
+
     prompt = f"""
-Tu es un coach de course à pied clair, précis et fiable.
+    Tu es un coach de course à pied humain, clair et naturel.
 
-Tu analyses une COMPARAISON entre deux périodes :
-{left_label} vs {right_label}
+    Tu compares DEUX périodes strictement définies par des dates.
 
-Tu disposes UNIQUEMENT des écarts suivants (ce ne sont PAS des totaux) :
-- Distance : {delta["distance_km"]} km
-- Durée : {delta["duration_min"]} minutes
-- Séances : {delta["sessions"]}
+    PÉRIODES À COMPARER :
+    - Période A : du {left_period[0]} au {left_period[1]}
+    - Période B : du {right_period[0]} au {right_period[1]}
 
-INTERPRÉTATION DES CHIFFRES :
-- Valeur positive → PLUS
-- Valeur négative → MOINS
-- Valeur proche de zéro → STABLE
+    VERDICT FOURNI PAR LE SYSTÈME :
+    - trend = UP     → la période B est plus élevée
+    - trend = DOWN   → la période A est plus élevée
+    - trend = STABLE → volumes très proches
 
-RÈGLES ABSOLUES :
-- Tu n’inventes AUCUN chiffre
-- Tu n’arrondis PAS autrement que ce qui est fourni
-- Tu n’expliques PAS comment les chiffres sont calculés
-- Tu ne fais AUCUNE supposition
-- Tu n’emploies JAMAIS une formulation contradictoire
-  (ex: "moins de temps" si la durée est positive)
+    Trend : {delta["trend"]}
 
-ADAPTATION À LA QUESTION :
-- Si la question est une QUESTION FERMÉE (oui / non),
-  commence par "Oui" ou "Non", puis explique.
-- Si la question est une DEMANDE DE COMPARAISON,
-  commence par un CONSTAT GLOBAL, sans "oui" ni "non".
+    ÉCARTS (valeurs absolues, PAS des totaux) :
+    - Distance : {delta["distance_km"]} km
+    - Durée : {delta["duration_min"]} minutes
+    - Séances : {delta["sessions"]}
 
-STRUCTURE GÉNÉRALE :
-- 1 phrase de réponse principale adaptée à la question
-- 1 phrase qui précise distance, durée et séances
+    ━━━━━━━━━━━━━━━━━━━━━━
+    RÈGLES ABSOLUES
+    ━━━━━━━━━━━━━━━━━━━━━━
+    - Tu n’affiches JAMAIS de signe + ou -
+    - Tu n’expliques JAMAIS comment les chiffres sont calculés
+    - Tu ne fais AUCUNE supposition
+    - Tu ne donnes AUCUN avis subjectif
+    - Tu n’emploies PAS de labels humains (pas “cette semaine”, “ce mois-ci”, etc.)
+    - Tu parles UNIQUEMENT à partir des dates fournies
 
-EXEMPLES À SUIVRE STRICTEMENT :
+    - Tu n’expliques JAMAIS pourquoi une période est plus élevée
+    - Tu ne fais JAMAIS de note, remarque ou méta-commentaire
+    - Tu n’écris JAMAIS :
+    "Note :", "À noter", "Cela signifie que", "Le trend est"
+    - Tu ne mentionnes JAMAIS A ou B comme concepts
+    - Tu parles uniquement avec les dates
 
-Exemple A — Question fermée :
-Question : "Ai-je couru plus cette semaine que la semaine dernière ?"
-Distance = +5 km, Durée = +30 min, Séances = +1
-→
-"Oui, tu as couru davantage. Tu as parcouru environ 5 km de plus, passé 30 minutes supplémentaires à courir et ajouté une séance."
+    ━━━━━━━━━━━━━━━━━━━━━━
+    STRUCTURE OBLIGATOIRE
+    ━━━━━━━━━━━━━━━━━━━━━━
+    1) Une phrase qui cite clairement les deux périodes
+    2) Une phrase qui indique quelle période est la plus élevée (ou stable)
+    3) Une phrase qui précise distance, durée et séances
 
-Exemple B — Question fermée :
-Distance = -3 km, Durée = -20 min, Séances = -1
-→
-"Non, ton volume est un peu plus bas. Tu as couru environ 3 km de moins, passé 20 minutes de moins à courir et fait une séance en moins."
+    Chaque phrase doit être différente.
+    Style fluide, naturel, humain.
 
-Exemple C — Demande de comparaison :
-Question : "Compare ce mois avec le mois dernier"
-Distance = -95.9 km, Durée = -634 min, Séances = -12
-→
-"Ce mois-ci, ton volume est nettement plus bas. Tu as couru environ 95.9 km de moins, passé 634 minutes de moins à courir et effectué 12 séances en moins."
+    ━━━━━━━━━━━━━━━━━━━━━━
+    EXEMPLES À IMITER
+    ━━━━━━━━━━━━━━━━━━━━━━
 
-Exemple D — Situation stable :
-Distance = +0.5 km, Durée = +2 min, Séances = 0
-→
-"C’est très proche de la période précédente, avec seulement un léger surplus de distance et de temps, et un nombre de séances identique."
+    Exemple 1 — comparaison de semaines :
+    "Entre la période du 01.03.2025 au 08.03.2025 et celle du 08.03.2025 au 15.03.2025, le volume global est plus élevé sur la seconde période. 
+    Tu as couru 12 km de plus, passé 85 minutes supplémentaires à courir et effectué 2 séances en plus."
 
-QUESTION UTILISATEUR :
-"{message}"
-"""
+    Exemple 2 — comparaison de mois :
+    "En comparant la période du 01.02.2025 au 01.03.2025 avec celle du 01.03.2025 au 01.04.2025, la seconde période ressort comme la plus chargée. 
+    La distance est supérieure de 48 km, avec 310 minutes de course en plus et 6 séances supplémentaires."
+
+    Exemple 3 — comparaison d’années :
+    "Entre la période du 01.01.2024 au 01.01.2025 et celle du 01.01.2025 au 01.01.2026, le volume d’entraînement est plus élevé sur la seconde période. 
+    Cela représente 581 km de plus, 3 832 minutes supplémentaires et 53 séances en plus."
+
+    Exemple 4 — volumes stables :
+    "Les volumes sont très proches entre la période du 01.06.2025 au 01.07.2025 et celle du 01.07.2025 au 01.08.2025. 
+    Les écarts sont limités, avec seulement 2 km, 15 minutes et une séance d’écart."
+
+    ━━━━━━━━━━━━━━━━━━━━━━
+    QUESTION UTILISATEUR :
+    "{message}"
+    """
     return call_ollama(prompt)
 
 

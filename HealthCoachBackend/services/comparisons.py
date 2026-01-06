@@ -34,3 +34,22 @@ def resolve_intent(message: str) -> str:
         return "COMPARE"
 
     return "FACTUAL"
+
+
+def infer_period_context_from_keys(left_key: str | None) -> str | None:
+    """
+    Retourne le contexte temporel si la période de gauche est EN COURS.
+    """
+    if left_key == "CURRENT_WEEK":
+        return "WEEK"
+
+    if left_key == "CURRENT_MONTH":
+        return "MONTH"
+
+    if left_key == "CURRENT_YEAR":
+        return "YEAR"
+
+    if left_key.startswith("YEAR_"):
+        return None
+
+    return None

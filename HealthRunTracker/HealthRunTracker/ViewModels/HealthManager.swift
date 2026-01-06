@@ -1139,6 +1139,18 @@ extension HealthManager {
             }
         }
     }
+    
+    func makeYearSnapshot(
+        year: Int,
+        completion: @escaping (WeeklySnapshot) -> Void
+    ) {
+        let calendar = Calendar.current
+        let start = calendar.date(from: DateComponents(year: year, month: 1, day: 1))!
+        let end = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1))!
+
+        makeSnapshot(from: start, to: end, completion: completion)
+    }
+    
     func computeZonesPercent(from runs: [DailyRunData]) -> [String: Double] {
         let z1 = runs.map(\.z1).reduce(0, +)
         let z2 = runs.map(\.z2).reduce(0, +)
@@ -1159,3 +1171,50 @@ extension HealthManager {
     }
 }
 
+// MARK: - SNAPSHOT ANNUEL (CHAT)
+
+extension HealthManager {
+    func makeYearSnapshot(year: Int) -> WeeklySnapshot {
+        let calendar = Calendar.current
+
+        let startDate = calendar.date(from: DateComponents(year: year, month: 1, day: 1))!
+        let endDate = calendar.date(from: DateComponents(year: year + 1, month: 1, day: 1))!
+
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        // 🔹 Données déjà calculées dans yearlyData
+        let months = yearlyData.filter { _ in true } // déjà pour l’année courante chargée
+        // ⚠️ si tu veux gérer plusieurs années → on adaptera après
+
+        let totalDistance = months.map(\.distanceKm).reduce(0, +)
+        let totalDuration = months.map(\.durationMin).reduce(0, +)
+        let totalElevation = months.map(\.elevationGainM).reduce(0, +)
+
+        let totals = WeeklyTotals(
+            distanceKm: totalDistance,
+            durationMin: totalDuration,
+            sessions: yearlySessionCount,
+            elevationM: totalElevation,
+            avgHr: nil           // ❌ PAS DE FC ANNUELLE
+        )
+
+        let snapshot = WeeklySnapshot(
+            weekLabel: "Année \(year)",
+            period: PeriodSnapshot(
+                start: formatter.string(from: startDate),
+                end: formatter.string(from: endDate)
+            ),
+            totals: totals,
+            zonesPercent: [:],    // ❌ PAS DE ZONES
+            dailyRuns: [],        // ❌ PAS DE DAILY RUNS
+            trainingLoad: nil,
+            comparisonPrevWeek: nil,
+            longestRunKm: longestRunDistance
+        )
+
+        return snapshot
+    }
+}

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -7,7 +7,7 @@ from agent import (
     analyze_question,
     comparison_response_agent,
 )
-from services.comparisons import resolve_intent
+from services.comparisons import resolve_intent, infer_period_context_from_keys
 from services.intent import (
     apply_backend_overrides,
     route_decision,
@@ -41,6 +41,8 @@ def chat(req: ChatRequest):
     print("📝 MESSAGE :", req.message)
     print("📦 SNAPSHOT REÇU")
     print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
+    print("🔥 snapshots =", req.snapshots)
+    print("🔥 meta =", req.meta)
 
     # ======================================================
     # 🔴 COMPARAISON FINALE — PRIORITÉ ABSOLUE
@@ -49,21 +51,39 @@ def chat(req: ChatRequest):
     if req.snapshots is not None and req.meta is not None:
         print("🟢 COMPARAISON FINALE — SNAPSHOTS PRÉSENTS")
 
+        if not req.snapshots:
+            raise HTTPException(
+                status_code=400, detail="snapshots manquant pour comparaison"
+            )
+
         left = req.snapshots.left
         right = req.snapshots.right
 
+        raw_delta_distance = right.totals.distance_km - left.totals.distance_km
+        raw_delta_duration = right.totals.duration_min - left.totals.duration_min
+        raw_delta_sessions = right.totals.sessions - left.totals.sessions
+
+        trend = (
+            "UP"
+            if raw_delta_distance > 0
+            else "DOWN"
+            if raw_delta_distance < 0
+            else "STABLE"
+        )
+
         delta = {
-            "distance_km": round(left.totals.distance_km - right.totals.distance_km, 1),
-            "duration_min": round(left.totals.duration_min - right.totals.duration_min),
-            "sessions": left.totals.sessions - right.totals.sessions,
+            "distance_km": round(abs(raw_delta_distance), 1),
+            "duration_min": round(abs(raw_delta_duration)),
+            "sessions": abs(raw_delta_sessions),
+            "trend": trend,
         }
 
         reply = comparison_response_agent(
             message=req.message,
             metric=req.meta.get("metric", "DISTANCE"),
             delta=delta,
-            left_label=req.meta.get("left_label", "période 1"),
-            right_label=req.meta.get("right_label", "période 2"),
+            left_period=(left.period.start, left.period.end),
+            right_period=(right.period.start, right.period.end),
         )
 
         return {"reply": reply}
