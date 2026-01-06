@@ -132,7 +132,52 @@ Retourne :
 }}
 
 ========================================
-5 - ANSWER_NOW FACTUEL
+5 - CHANGEMENT DE PÉRIODE — ANNÉES RELATIVES
+========================================
+
+Si la question contient EXACTEMENT :
+- "l'année dernière"
+- "annee derniere"
+- "l’an dernier"
+- "an dernier"
+- "l’année passée"
+- "annee passee"
+
+ALORS tu DOIS retourner EXACTEMENT :
+{{
+  "type": "REQUEST_YEAR_RELATIVE",
+  "offset": -1,
+  "metric": "<métrique détectée>"
+}}
+
+Tu n’as PAS le droit :
+- de retourner REQUEST_MONTH_RELATIVE
+- de retourner REQUEST_MONTH
+- de retourner REQUEST_WEEK
+
+Si la question contient une expression du type :
+- "il y a X ans"
+- "il y a X années"
+où X est un nombre entier strictement positif,
+
+ALORS tu DOIS retourner EXACTEMENT :
+{{
+   "type": "REQUEST_YEAR_RELATIVE",
+  "offset": -X,
+  "metric": "<métrique détectée>"
+}}
+
+Exemples :
+- "il y a 2 ans" → offset = -2
+- "il y a 5 ans" → offset = -5
+Tu n’as PAS le droit :
+- de retourner REQUEST_MONTH_RELATIVE
+- de retourner REQUEST_MONTH
+- de retourner REQUEST_WEEK
+- de retourner ANSWER_NOW
+
+========================================
+6 - ANSWER_NOW FACTUEL
 ========================================
 
 Si la question demande une valeur mesurable
@@ -146,7 +191,7 @@ Retourne :
 }}
 
 ========================================
-6 - PAR DÉFAUT
+7 - PAR DÉFAUT
 ========================================
 
 Retourne :
@@ -192,7 +237,7 @@ MÉTRIQUES POSSIBLES
 DISTANCE | DURATION | SESSIONS | AVG_HR | PACE | ELEVATION | LOAD | UNKNOWN
 
 ========================================
-7 - COMPARAISONS (PRIORITÉ HAUTE)
+8 - COMPARAISONS (PRIORITÉ HAUTE)
 ========================================
 
 Si la question compare deux périodes
@@ -259,7 +304,7 @@ Retourne :
 
 
 ========================================
-8 - BIS — BILAN / RÉSUMÉ (PRIORITÉ HAUTE)
+9 - BIS — BILAN / RÉSUMÉ (PRIORITÉ HAUTE)
 ========================================
 
 Si la question contient une demande de synthèse globale,

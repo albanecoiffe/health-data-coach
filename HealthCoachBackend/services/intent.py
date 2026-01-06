@@ -113,6 +113,16 @@ def resolve_period_from_decision(
         end = start + timedelta(days=days)
         return start, end
 
+    # ======================
+    # 📆 ANNÉE
+    # ======================
+    if decision["type"] == "REQUEST_YEAR_RELATIVE":
+        offset = int(decision.get("offset", -1))
+        year = date.today().year + offset
+        start = date(year, 1, 1)
+        end = date(year + 1, 1, 1)
+        return start, end
+
     return None, None
 
 
@@ -134,6 +144,7 @@ def route_decision(req: ChatRequest, decision: dict):
         "REQUEST_WEEK",
         "REQUEST_MONTH",
         "REQUEST_MONTH_RELATIVE",
+        "REQUEST_YEAR_RELATIVE",
         "SUMMARY",
     ]:
         # ⚠️ IMPORTANT :
