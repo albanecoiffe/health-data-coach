@@ -256,7 +256,7 @@ Exemples :
 "Est-ce que j’ai couru plus que la semaine dernière ?"
 →
 {{
-        "type": "COMPARE_PERIODS",
+   "type": "COMPARE_PERIODS",
   "metric": "DISTANCE",
   "left": "CURRENT_WEEK",
   "right": "PREVIOUS_WEEK"
@@ -265,7 +265,7 @@ Exemples :
 "Est-ce que je fais plus de séances ce mois-ci ?"
 →
 {{
-        "type": "COMPARE_PERIODS",
+   "type": "COMPARE_PERIODS",
   "metric": "SESSIONS",
   "left": "CURRENT_MONTH",
   "right": "PREVIOUS_MONTH"
@@ -275,7 +275,7 @@ Si la question contient :
 - "ce mois par rapport au mois dernier"
 →
 {{
-        "type": "COMPARE_PERIODS",
+   "type": "COMPARE_PERIODS",
   "metric": "<metric>",
   "left": "CURRENT_MONTH",
   "right": "PREVIOUS_MONTH"
@@ -304,12 +304,10 @@ Retourne :
 
 
 ========================================
-9 - BIS — BILAN / RÉSUMÉ (PRIORITÉ HAUTE)
+9 - BILAN / RÉSUMÉ (PRIORITÉ HAUTE)
 ========================================
 
-Si la question contient une demande de synthèse globale,
-par exemple les mots :
-
+Si la question contient une demande de synthèse globale avec:
 - "bilan"
 - "résumé"
 - "resume"
@@ -320,18 +318,24 @@ par exemple les mots :
 - "vue d’ensemble"
 - "vue d'ensemble"
 
-ALORS tu DOIS retourner EXACTEMENT :
+CAS 1 — une année explicite (YYYY) est mentionnée :
+Retourne STRICTEMENT :
+{{
+        "type": "REQUEST_YEAR",
+  "year": YYYY
+}}
 
+CAS 2 — aucune période explicite :
+Retourne STRICTEMENT :
 {{
         "type": "SUMMARY"
 }}
 
 RÈGLES ABSOLUES :
-- Tu ne retournes PAS de metric
-- Tu ne retournes PAS d’offset
-- Tu ne demandes PAS de snapshot
-- Tu ne retournes PAS ANSWER_NOW
-- Tu ne fais AUCUNE supposition sur la période
+- SUMMARY ne contient JAMAIS de year
+- SUMMARY ne contient JAMAIS d’offset
+- Si une période est mentionnée, SUMMARY est INTERDIT
+- Tu ne retournes JAMAIS SUMMARY avec une période
 
 
 ========================================
@@ -565,8 +569,7 @@ def comparison_response_agent(
 
 
 def summary_response(snapshot) -> dict:
-    start = snapshot.period.start
-    end = snapshot.period.end
+    start, end = format_period_for_display(snapshot.period.start, snapshot.period.end)
 
     if snapshot.totals.sessions == 0:
         return {
