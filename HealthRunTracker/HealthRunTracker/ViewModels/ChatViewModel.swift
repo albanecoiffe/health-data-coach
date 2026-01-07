@@ -23,6 +23,7 @@ struct PeriodPayload: Codable {
     let start: String
     let end: String
 }
+let baseURL = "http://192.168.1.113:8000"
 
 
 class ChatViewModel: ObservableObject {
@@ -55,7 +56,7 @@ class ChatViewModel: ObservableObject {
 
     func askPythonBot(_ message: String) async -> String? {
 
-        guard let url = URL(string: "http://192.168.1.77:8000/chat") else {
+        guard let url = URL(string: "\(baseURL)/chat")else {
             return "URL invalide."
         }
 
@@ -179,7 +180,7 @@ class ChatViewModel: ObservableObject {
 
     private func sendPayload(_ payload: ChatRequest) async -> String? {
 
-        guard let url = URL(string: "http://192.168.1.77:8000/chat") else {
+        guard let url = URL(string: "\(baseURL)/chat") else {
             return "URL invalide."
         }
 
@@ -203,7 +204,7 @@ class ChatViewModel: ObservableObject {
     }
     
     private func sendPayloadRaw(_ payload: ChatRequest) async -> CoachAPIResponse? {
-        guard let url = URL(string: "http://192.168.1.77:8000/chat") else {
+        guard let url = URL(string: "\(baseURL)/chat") else {
             return nil
         }
 
