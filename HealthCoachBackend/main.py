@@ -6,12 +6,16 @@ from schemas import ChatRequest
 from agent import (
     analyze_question,
     comparison_response_agent,
+    factual_response,
+    summary_response,
 )
 from services.comparisons import resolve_intent, infer_period_context_from_keys
 from services.intent import (
     apply_backend_overrides,
     route_decision,
 )
+
+from services.periods import snapshot_matches_iso
 
 app = FastAPI()
 
@@ -43,6 +47,24 @@ def chat(req: ChatRequest):
     print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
     print("🔥 snapshots =", req.snapshots)
     print("🔥 meta =", req.meta)
+
+    # ======================================================
+    # 🔒 SNAPSHOT EXACT DÉJÀ FOURNI → RÉPONSE DIRECTE
+    # ======================================================
+    if req.meta:
+        req_start = req.meta.get("requested_start")
+        req_end = req.meta.get("requested_end")
+        reply_mode = req.meta.get("reply_mode", "FACTUAL")
+        metric = req.meta.get("metric", "DISTANCE")
+
+        if req_start and req_end:
+            if snapshot_matches_iso(req.snapshot, req_start, req_end):
+                print("🟢 SNAPSHOT EXACT — RÉPONSE DIRECTE (NO LLM)")
+                return (
+                    summary_response(req.snapshot)
+                    if reply_mode == "SUMMARY"
+                    else factual_response(req.snapshot, metric)
+                )
 
     # ======================================================
     # 🔴 COMPARAISON FINALE — PRIORITÉ ABSOLUE

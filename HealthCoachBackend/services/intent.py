@@ -309,7 +309,9 @@ def route_decision(req: ChatRequest, decision: dict):
         k in msg for k in ["bilan", "resume", "résumé", "recap", "synthese", "stat"]
     )
 
-    # 🔴 Année (si snapshot correspond : summary)
+    # ======================================================
+    # 🔒 ANNÉE — SNAPSHOT STRICT
+    # ======================================================
     if decision_type in ["REQUEST_YEAR", "REQUEST_YEAR_RELATIVE"]:
         start, end = resolve_period_from_decision(decision, req.message)
 
@@ -322,18 +324,29 @@ def route_decision(req: ChatRequest, decision: dict):
                 "start": start.isoformat(),
                 "end": end.isoformat(),
             },
+            "meta": {
+                "metric": metric,
+                "requested_start": start.isoformat(),
+                "requested_end": end.isoformat(),
+                "reply_mode": "SUMMARY",  # 🔥 LA LIGNE MANQUANTE
+            },
         }
 
-    # 🔵 SUMMARY "pur" = période courante UNIQUEMENT
+    # ======================================================
+    # 🔒 SUMMARY PUR = période courante UNIQUEMENT
+    # (aucune résolution de période ici)
+    # ======================================================
     if decision_type == "SUMMARY":
         return summary_response(req.snapshot)
 
-    # 🟡 mois / semaines
+    # ======================================================
+    # 🔒 SEMAINES / MOIS — SNAPSHOT STRICT
+    # ======================================================
     if decision_type in ["REQUEST_WEEK", "REQUEST_MONTH", "REQUEST_MONTH_RELATIVE"]:
         start, end = resolve_period_from_decision(decision, req.message)
 
         if snapshot_matches_period(req.snapshot, start, end):
-            # ✅ si l’utilisateur a demandé un bilan, on renvoie le summary
+            # ⚠️ AUCUNE redécision possible ici
             if wants_summary:
                 return summary_response(req.snapshot)
             return factual_response(req.snapshot, metric)
@@ -341,17 +354,29 @@ def route_decision(req: ChatRequest, decision: dict):
         return {
             "type": "REQUEST_SNAPSHOT",
             "period": {"start": start.isoformat(), "end": end.isoformat()},
-            "meta": {"metric": metric},
+            "meta": {
+                "metric": metric,
+                "requested_start": start.isoformat(),
+                "requested_end": end.isoformat(),
+                "reply_mode": "SUMMARY" if wants_summary else "FACTUAL",
+            },
         }
 
-    # Comparaison
+    # ======================================================
+    # 🟣 COMPARAISONS
+    # ======================================================
     if decision_type == "COMPARE_PERIODS":
         return build_compare_request(decision, metric)
 
-    # Fallback
+    # ======================================================
+    # 🟢 FACTUAL DIRECT
+    # ======================================================
     if decision.get("answer_mode") == "FACTUAL":
         return factual_response(req.snapshot, metric)
 
+    # ======================================================
+    # 💬 COACHING / SMALL TALK
+    # ======================================================
     return {"reply": answer_with_snapshot(req.message, req.snapshot)}
 
 

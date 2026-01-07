@@ -156,7 +156,8 @@ class ChatViewModel: ObservableObject {
                             let reply = await self.requestSnapshotAndRetry(
                                 message: message,
                                 start: start,
-                                end: end
+                                end: end,
+                                meta: decoded.meta
                             )
 
                             continuation.resume(returning: reply)
@@ -227,16 +228,32 @@ class ChatViewModel: ObservableObject {
     func requestSnapshotAndRetry(
         message: String,
         start: Date,
-        end: Date
+        end: Date,
+        meta: [String: String]?
     ) async -> String? {
 
         await withCheckedContinuation { continuation in
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+
+            // ✅ On PART du meta backend (s’il existe)
+            var enrichedMeta = meta ?? [:]
+
+            // ✅ On ajoute / écrase UNIQUEMENT ce qui est nécessaire
+            enrichedMeta["requested_start"] = formatter.string(from: start)
+            enrichedMeta["requested_end"]   = formatter.string(from: end)
+
+            // garde-fous
+            enrichedMeta["metric"] = enrichedMeta["metric"] ?? "DISTANCE"
+            enrichedMeta["reply_mode"] = enrichedMeta["reply_mode"] ?? "FACTUAL"
 
             healthManager.makeSnapshot(from: start, to: end) { snapshot in
                 Task {
                     let payload = ChatRequest(
                         message: message,
-                        snapshot: snapshot
+                        snapshot: snapshot,
+                        meta: enrichedMeta
                     )
 
                     let reply = await self.sendPayload(payload)
@@ -245,6 +262,7 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+
 
     func requestSnapshotBatchAndRetry(
         message: String,
@@ -256,6 +274,18 @@ class ChatViewModel: ObservableObject {
     ) async -> String? {
 
         await withCheckedContinuation { continuation in
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+
+            let enrichedMeta: [String: String] = {
+                var m = meta
+                m["requested_left_start"] = formatter.string(from: leftStart)
+                m["requested_left_end"]   = formatter.string(from: leftEnd)
+                m["requested_right_start"] = formatter.string(from: rightStart)
+                m["requested_right_end"]   = formatter.string(from: rightEnd)
+                return m
+            }()
 
             // ======================================================
             // 🔑 CAS ANNUEL
@@ -272,12 +302,12 @@ class ChatViewModel: ObservableObject {
                         Task {
                             let payload = ChatRequest(
                                 message: message,
-                                snapshot: leftSnapshot,   // requis par FastAPI
+                                snapshot: leftSnapshot, // requis par FastAPI
                                 snapshots: SnapshotPair(
                                     left: leftSnapshot,
                                     right: rightSnapshot
                                 ),
-                                meta: meta
+                                meta: enrichedMeta
                             )
 
                             let decoded = await self.sendPayloadRaw(payload)
@@ -287,12 +317,11 @@ class ChatViewModel: ObservableObject {
                         }
                     }
                 }
-
                 return
             }
 
             // ======================================================
-            // 🔵 CAS SEMAINE / MOIS (inchangé)
+            // 🔵 CAS SEMAINE / MOIS
             // ======================================================
             healthManager.makeSnapshot(from: leftStart, to: leftEnd) { leftSnapshot in
                 self.healthManager.makeSnapshot(from: rightStart, to: rightEnd) { rightSnapshot in
@@ -300,12 +329,12 @@ class ChatViewModel: ObservableObject {
                     Task {
                         let payload = ChatRequest(
                             message: message,
-                            snapshot: leftSnapshot,   // requis par FastAPI
+                            snapshot: leftSnapshot, // requis par FastAPI
                             snapshots: SnapshotPair(
                                 left: leftSnapshot,
                                 right: rightSnapshot
                             ),
-                            meta: meta
+                            meta: enrichedMeta
                         )
 
                         let decoded = await self.sendPayloadRaw(payload)
@@ -317,4 +346,5 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+
 }

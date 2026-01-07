@@ -131,3 +131,11 @@ def normalize(text: str) -> str:
     text = text.replace("–", "-").replace("—", "-")
 
     return text
+
+
+def snapshot_matches_iso(snapshot, start_iso: str, end_iso: str) -> bool:
+    """
+    Vérifie que le snapshot correspond exactement à la période demandée.
+    On compare des strings ISO (yyyy-mm-dd) → simple et fiable.
+    """
+    return snapshot.period.start == start_iso and snapshot.period.end == end_iso
