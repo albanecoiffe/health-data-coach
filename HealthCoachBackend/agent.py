@@ -531,11 +531,13 @@ RÈGLES ABSOLUES
 - Tu ne répètes PAS les métriques
 - Tu ne fais AUCUNE interprétation
 - Tu ne donnes AUCUN conseil
-- Tu n’emploies PAS de labels humains (pas "ce mois-ci", etc.)
 - Tu parles UNIQUEMENT avec les dates fournies
 - Tu ne fais AUCUN méta-commentaire
 - Tu présentes toujours la comparaison en partant de la période la plus récente
 - Tu ne mentionnes jamais UP, DOWN ou STABLE dans le texte
+- Tu ne mentionnes JAMAIS d’autre période que celles fournies
+- Tu n’emploies AUCUNE référence temporelle externe (année, saison, cycle, historique, passé)
+- Toute comparaison doit porter UNIQUEMENT sur les deux périodes données
 
 ━━━━━━━━━━━━━━━━━━━━━━
 STRUCTURE OBLIGATOIRE

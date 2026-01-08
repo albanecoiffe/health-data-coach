@@ -12,6 +12,7 @@ from agent import (
 from services.intent import (
     apply_backend_overrides,
     route_decision,
+    compute_intensity_split,
 )
 from services.periods import snapshot_matches_iso
 
@@ -97,6 +98,21 @@ def chat(req: ChatRequest):
             "sessions": raw_delta_sessions,
             "trend": trend,
         }
+        # ❤️ INTENSITÉ — CALCUL BACKEND
+        left_intensity = compute_intensity_split(left)
+        right_intensity = compute_intensity_split(right)
+
+        if left_intensity and right_intensity:
+            intensity_delta = {
+                "low_pct": round(
+                    left_intensity["low_pct"] - right_intensity["low_pct"], 1
+                ),
+                "high_pct": round(
+                    left_intensity["high_pct"] - right_intensity["high_pct"], 1
+                ),
+            }
+        else:
+            intensity_delta = None
 
         print("📊 DELTA CALCULÉ :", delta)
 
@@ -104,8 +120,16 @@ def chat(req: ChatRequest):
         metrics_block = (
             f"🏃 Distance : {delta['distance_km']} km\n"
             f"⏱️ Durée : {delta['duration_min']} minutes\n"
-            f"📆 Séances : {delta['sessions']}"
+            f"📆 Séances : {delta['sessions']}\n"
         )
+        if intensity_delta:
+            intensity_block = (
+                "❤️ Intensité\n"
+                f"- 🟢 Z1–Z3 : {intensity_delta['low_pct']} %\n"
+                f"- 🔴 Z4–Z5 : {intensity_delta['high_pct']} %\n"
+            )
+        else:
+            intensity_block = ""
         print(
             f"🧪 CHECK COMPARISON | LEFT={left.totals.distance_km} km | "
             f"RIGHT={right.totals.distance_km} km | RAW_DELTA={raw_delta_distance}"
@@ -122,7 +146,9 @@ def chat(req: ChatRequest):
         )
 
         # 🧩 ASSEMBLAGE FINAL
-        final_reply = f"{narrative_text}\n\n{metrics_block}"
+        final_reply = f"{narrative_text}\n\n{metrics_block}" + (
+            f"\n\n{intensity_block}" if intensity_block else ""
+        )
 
         return {
             "type": "ANSWER_NOW",
