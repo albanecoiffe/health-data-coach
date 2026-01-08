@@ -196,6 +196,12 @@ def route_decision(req: ChatRequest, decision: dict):
     metric = decision.get("metric", "DISTANCE")
 
     # ======================================================
+    # 🟣 COMPARAISON DE PÉRIODES (PRIORITÉ ABSOLUE)
+    # ======================================================
+    if decision.get("type") == "COMPARE_PERIODS":
+        return build_compare_request(decision, metric)
+
+    # ======================================================
     # 🛑 ANSWER_NOW → réponse immédiate
     # ======================================================
     if decision.get("type") == "ANSWER_NOW":
