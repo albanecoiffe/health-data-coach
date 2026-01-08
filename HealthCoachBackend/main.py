@@ -78,9 +78,10 @@ def chat(req: ChatRequest):
         left = req.snapshots.left
         right = req.snapshots.right
 
-        raw_delta_distance = right.totals.distance_km - left.totals.distance_km
-        raw_delta_duration = right.totals.duration_min - left.totals.duration_min
-        raw_delta_sessions = right.totals.sessions - left.totals.sessions
+        # 🔢 CALCULS STRICTEMENT BACKEND
+        raw_delta_distance = left.totals.distance_km - right.totals.distance_km
+        raw_delta_duration = left.totals.duration_min - right.totals.duration_min
+        raw_delta_sessions = left.totals.sessions - right.totals.sessions
 
         trend = (
             "UP"
@@ -91,23 +92,41 @@ def chat(req: ChatRequest):
         )
 
         delta = {
-            "distance_km": round(abs(raw_delta_distance), 1),
-            "duration_min": round(abs(raw_delta_duration)),
-            "sessions": abs(raw_delta_sessions),
+            "distance_km": round(raw_delta_distance, 1),
+            "duration_min": round(raw_delta_duration),
+            "sessions": raw_delta_sessions,
             "trend": trend,
         }
 
-        reply = comparison_response_agent(
+        print("📊 DELTA CALCULÉ :", delta)
+
+        # 🧱 BLOC MÉTRIQUES DÉTERMINISTE (JAMAIS LLM)
+        metrics_block = (
+            f"🏃 Distance : {delta['distance_km']} km\n"
+            f"⏱️ Durée : {delta['duration_min']} minutes\n"
+            f"📆 Séances : {delta['sessions']}"
+        )
+        print(
+            f"🧪 CHECK COMPARISON | LEFT={left.totals.distance_km} km | "
+            f"RIGHT={right.totals.distance_km} km | RAW_DELTA={raw_delta_distance}"
+        )
+
+        # 🧠 TEXTE HUMAIN (LLM, SANS CHIFFRES)
+        narrative_text = comparison_response_agent(
             message=req.message,
             metric=req.meta.get("metric", "DISTANCE"),
             delta=delta,
             left_period=(left.period.start, left.period.end),
             right_period=(right.period.start, right.period.end),
+            period_context=req.meta.get("period_context"),
         )
+
+        # 🧩 ASSEMBLAGE FINAL
+        final_reply = f"{narrative_text}\n\n{metrics_block}"
 
         return {
             "type": "ANSWER_NOW",
-            "reply": reply,
+            "reply": final_reply,
         }
 
     # ======================================================
