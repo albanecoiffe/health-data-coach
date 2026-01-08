@@ -27,6 +27,7 @@ let baseURL = "http://192.168.1.113:8000"
 
 
 class ChatViewModel: ObservableObject {
+    private let sessionId = UUID().uuidString
     @Published var messages: [ChatMessage] = []
     @Published var currentInput: String = ""
 
@@ -76,9 +77,13 @@ class ChatViewModel: ObservableObject {
 
                 Task {
                     do {
+                        var meta: [String: String] = [:]
+                        meta["session_id"] = self.sessionId
+
                         let payload = ChatRequest(
                             message: message,
-                            snapshot: snapshot
+                            snapshot: snapshot,
+                            meta: meta
                         )
 
                         var req = URLRequest(url: url)
@@ -264,7 +269,6 @@ class ChatViewModel: ObservableObject {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
 
-            // ✅ Meta backend (s’il existe)
             var enrichedMeta = meta ?? [:]
 
             // ✅ Période demandée
@@ -277,11 +281,13 @@ class ChatViewModel: ObservableObject {
 
             healthManager.makeSnapshot(from: start, to: end) { snapshot in
                 Task {
+                    var finalMeta = enrichedMeta
+                    finalMeta["session_id"] = self.sessionId
 
                     let payload = ChatRequest(
                         message: message,
                         snapshot: snapshot,
-                        meta: enrichedMeta
+                        meta: finalMeta
                     )
 
                     // 🔴 IMPORTANT : on utilise la réponse BRUTE
@@ -366,6 +372,9 @@ class ChatViewModel: ObservableObject {
                     self.healthManager.makeYearSnapshot(year: rightYear) { rightSnapshot in
 
                         Task {
+                            var finalMeta = enrichedMeta
+                            finalMeta["session_id"] = self.sessionId
+                            
                             let payload = ChatRequest(
                                 message: message,
                                 snapshot: leftSnapshot, // requis par FastAPI
@@ -373,7 +382,7 @@ class ChatViewModel: ObservableObject {
                                     left: leftSnapshot,
                                     right: rightSnapshot
                                 ),
-                                meta: enrichedMeta
+                                meta: finalMeta
                             )
 
                             let decoded = await self.sendPayloadRaw(payload)
@@ -393,14 +402,16 @@ class ChatViewModel: ObservableObject {
                 self.healthManager.makeSnapshot(from: rightStart, to: rightEnd) { rightSnapshot in
 
                     Task {
+                        var finalMeta = enrichedMeta
+                        finalMeta["session_id"] = self.sessionId
                         let payload = ChatRequest(
                             message: message,
-                            snapshot: leftSnapshot, // requis par FastAPI
+                            snapshot: leftSnapshot,
                             snapshots: SnapshotPair(
                                 left: leftSnapshot,
                                 right: rightSnapshot
                             ),
-                            meta: enrichedMeta
+                            meta: finalMeta
                         )
 
                         let decoded = await self.sendPayloadRaw(payload)

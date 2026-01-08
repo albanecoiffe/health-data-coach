@@ -34,6 +34,10 @@ MONTHS = {
 def apply_backend_overrides(message: str, decision: dict) -> dict:
     msg = normalize(message)
 
+    # 🛑 SI LE LLM A DÉCIDÉ ANSWER_NOW → ON N'ÉCRASE JAMAIS
+    if decision.get("type") == "ANSWER_NOW":
+        return decision
+
     # 🔒 VERROU ABSOLU : décisions temporelles intouchables
     if decision.get("type") in {
         "REQUEST_WEEK",
@@ -307,6 +311,8 @@ def route_decision(req: ChatRequest, decision: dict):
     - ANSWER_NOW = réponse immédiate, aucune redécision
     - REQUEST_* = soit réponse directe si snapshot match, soit REQUEST_SNAPSHOT
     """
+    meta = req.meta or {}
+    session_id = meta.get("session_id", "default")
 
     # ======================================================
     # 🛑 ANSWER_NOW = RÉPONSE IMMÉDIATE, AUCUNE REDÉCISION
@@ -326,15 +332,16 @@ def route_decision(req: ChatRequest, decision: dict):
             }
 
         if answer_mode == "SMALL_TALK":
+            session_id = (req.meta or {}).get("session_id", "default")
             return {
                 "type": "ANSWER_NOW",
-                "reply": answer_with_snapshot(req.message, req.snapshot),
+                "reply": answer_with_snapshot(req.message, req.snapshot, session_id),
             }
 
         # fallback sécurisé
         return {
             "type": "ANSWER_NOW",
-            "reply": answer_with_snapshot(req.message, req.snapshot),
+            "reply": answer_with_snapshot(req.message, req.snapshot, session_id),
         }
 
     # ======================================================
@@ -486,7 +493,7 @@ def route_decision(req: ChatRequest, decision: dict):
     print("💬 SMALL TALK FALLBACK")
     return {
         "type": "ANSWER_NOW",
-        "reply": answer_with_snapshot(req.message, req.snapshot),
+        "reply": answer_with_snapshot(req.message, req.snapshot, session_id),
     }
 
 

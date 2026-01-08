@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from services.llm import call_ollama
 import calendar
 import json
+from services.memory import get_memory, add_to_memory
 
 
 def analyze_question(message: str, current_period: tuple[str, str]) -> dict:
@@ -373,15 +374,27 @@ PÉRIODE COURANTE
         return {"type": "ANSWER_NOW", "answer_mode": "SMALL_TALK"}
 
 
-def answer_with_snapshot(message: str, snapshot) -> str:
+def answer_with_snapshot(message: str, snapshot, session_id: str) -> str:
+    history = get_memory(session_id)
+
+    memory_text = ""
+    if history:
+        memory_text = "\n".join(f"{m['role']}: {m['content']}" for m in history)
+
     prompt = f"""
 Tu es un coach de course à pied humain et bienveillant.
+Conversation récente (si elle existe) :
+{memory_text}
 
 RÈGLES :
-- Small talk → réponse courte, aucune statistique
+- Small talk → réponse courte, empathique, naturelle
 - Coaching → tu peux utiliser les données ci-dessous
+- Ne répète PAS une salutation si la conversation est déjà entamée
+- Ne redémarre PAS la conversation à zéro
+- Ne poses PAS de question générique si le contexte est clair
 - Ne fais AUCUN calcul
 - Ne modifies AUCUN chiffre
+
 
 DONNÉES :
 - Distance : {snapshot.totals.distance_km}
@@ -391,8 +404,16 @@ DONNÉES :
 
 Question :
 {message}
+
+Réponds de manière cohérente avec la conversation précédente.
 """
-    return call_ollama(prompt)
+
+    reply = call_ollama(prompt)
+
+    add_to_memory(session_id, "user", message)
+    add_to_memory(session_id, "assistant", reply)
+
+    return reply
 
 
 def factual_response(snapshot, metric: str) -> dict:
