@@ -56,29 +56,31 @@ class ChatViewModel: ObservableObject {
 
     func askPythonBot(_ message: String) async -> String? {
 
-        guard let url = URL(string: "\(baseURL)/chat")else {
+        guard let url = URL(string: "\(baseURL)/chat") else {
             return "URL invalide."
         }
 
         let calendar = Calendar.current
         let now = Date()
         let interval = calendar.dateInterval(of: .weekOfYear, for: now)!
-        
-        // 🔑 ON ATTEND LE SNAPSHOT
+
         return await withCheckedContinuation { continuation in
 
-            healthManager.makeSnapshot(
-                from: interval.start,
-                to: interval.end
-            ) { snapshot in
+            print("📤 ASK COACH:", message)
+
+            healthManager.makeSnapshot(from: interval.start, to: interval.end) { snapshot in
+
+                print("📦 SNAPSHOT SENT:",
+                      snapshot.totals.sessions, "séances /",
+                      snapshot.totals.distanceKm, "km")
 
                 Task {
-                    let payload = ChatRequest(
-                        message: message,
-                        snapshot: snapshot
-                    )
-
                     do {
+                        let payload = ChatRequest(
+                            message: message,
+                            snapshot: snapshot
+                        )
+
                         var req = URLRequest(url: url)
                         req.httpMethod = "POST"
                         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -95,22 +97,67 @@ class ChatViewModel: ObservableObject {
                             return
                         }
 
+                        print("🟣 RAW:", String(data: data, encoding: .utf8) ?? "nil")
+
                         let decoded = try JSONDecoder().decode(CoachAPIResponse.self, from: data)
 
-                        print("🟣 RAW:", String(data: data, encoding: .utf8) ?? "nil")
-                        print("🟣 reply:", decoded.reply ?? "nil")
-                        print("🟣 type:", decoded.type ?? "nil")
+                        print("🧠 COACH RESPONSE")
+                        print("   type:", decoded.type ?? "nil")
+                        print("   reply:", decoded.reply ?? "nil")
 
-                        // 🟢 Réponse finale
-                        if let reply = decoded.reply {
+                        // ======================================================
+                        // 🔑 ROUTING UNIQUE PAR TYPE
+                        // ======================================================
+                        switch decoded.type {
+
+                        // ===============================
+                        // 🟢 RÉPONSE FINALE
+                        // ===============================
+                        case "ANSWER_NOW", "RECOMMENDATION":
+                            continuation.resume(
+                                returning: decoded.reply ?? "Le coach n’a rien à ajouter."
+                            )
+                            return
+
+                        // ===============================
+                        // 🟠 SNAPSHOT SIMPLE
+                        // ===============================
+                        case "REQUEST_SNAPSHOT":
+                            guard let period = decoded.period else {
+                                continuation.resume(returning: "Erreur période demandée")
+                                return
+                            }
+
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy-MM-dd"
+
+                            guard
+                                let start = formatter.date(from: period.start),
+                                let end = formatter.date(from: period.end)
+                            else {
+                                continuation.resume(returning: "Erreur parsing période")
+                                return
+                            }
+
+                            let reply = await self.requestSnapshotAndRetry(
+                                message: message,
+                                start: start,
+                                end: end,
+                                meta: decoded.meta
+                            )
+
                             continuation.resume(returning: reply)
                             return
-                        }
 
-                        // 🟣 Demande SNAPSHOT BATCH (COMPARAISON)
-                        if decoded.type == "REQUEST_SNAPSHOT_BATCH",
-                           let batch = decoded.snapshots,
-                           let meta = decoded.meta {
+                        // ===============================
+                        // 🟣 COMPARAISON
+                        // ===============================
+                        case "REQUEST_SNAPSHOT_BATCH":
+                            guard let batch = decoded.snapshots,
+                                  let meta = decoded.meta else {
+                                continuation.resume(returning: "Erreur comparaison")
+                                return
+                            }
 
                             let formatter = DateFormatter()
                             formatter.dateFormat = "yyyy-MM-dd"
@@ -136,40 +183,18 @@ class ChatViewModel: ObservableObject {
 
                             continuation.resume(returning: reply)
                             return
-                        }
 
-                        // 🟠 Demande SNAPSHOT SIMPLE
-                        if decoded.type == "REQUEST_SNAPSHOT",
-                           let period = decoded.period {
-
-                            let formatter = DateFormatter()
-                            formatter.dateFormat = "yyyy-MM-dd"
-
-                            guard
-                                let start = formatter.date(from: period.start),
-                                let end = formatter.date(from: period.end)
-                            else {
-                                continuation.resume(returning: "Erreur période")
-                                return
-                            }
-
-                            let reply = await self.requestSnapshotAndRetry(
-                                message: message,
-                                start: start,
-                                end: end,
-                                meta: decoded.meta
-                            )
-
-                            continuation.resume(returning: reply)
+                        // ===============================
+                        // ⚠️ CAS INCONNU
+                        // ===============================
+                        default:
+                            print("⚠️ TYPE INCONNU:", decoded.type ?? "nil")
+                            continuation.resume(returning: "Réponse non reconnue du coach.")
                             return
                         }
 
-                        continuation.resume(returning: "Réponse invalide du serveur")
-
-
-
                     } catch {
-                        print("❌ ERREUR RÉSEAU:", error)
+                        print("❌ ERREUR RÉSEAU / DÉCODAGE:", error)
                         continuation.resume(returning: "Le coach ne répond pas")
                     }
                 }
@@ -179,7 +204,8 @@ class ChatViewModel: ObservableObject {
 
 
 
-    private func sendPayload(_ payload: ChatRequest) async -> String? {
+
+    private func sendPayload(_ payload: ChatRequest) async -> String {
 
         guard let url = URL(string: "\(baseURL)/chat") else {
             return "URL invalide."
@@ -197,12 +223,13 @@ class ChatViewModel: ObservableObject {
             let (data, _) = try await URLSession.shared.data(for: req)
             let decoded = try JSONDecoder().decode(CoachAPIResponse.self, from: data)
 
-            return decoded.reply
+            return decoded.reply ?? "Aucune réponse du coach."
 
         } catch {
             return "Erreur serveur."
         }
     }
+
     
     private func sendPayloadRaw(_ payload: ChatRequest) async -> CoachAPIResponse? {
         guard let url = URL(string: "\(baseURL)/chat") else {
@@ -237,31 +264,70 @@ class ChatViewModel: ObservableObject {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
 
-            // ✅ On PART du meta backend (s’il existe)
+            // ✅ Meta backend (s’il existe)
             var enrichedMeta = meta ?? [:]
 
-            // ✅ On ajoute / écrase UNIQUEMENT ce qui est nécessaire
+            // ✅ Période demandée
             enrichedMeta["requested_start"] = formatter.string(from: start)
             enrichedMeta["requested_end"]   = formatter.string(from: end)
 
-            // garde-fous
+            // ✅ Garde-fous
             enrichedMeta["metric"] = enrichedMeta["metric"] ?? "DISTANCE"
             enrichedMeta["reply_mode"] = enrichedMeta["reply_mode"] ?? "FACTUAL"
 
             healthManager.makeSnapshot(from: start, to: end) { snapshot in
                 Task {
+
                     let payload = ChatRequest(
                         message: message,
                         snapshot: snapshot,
                         meta: enrichedMeta
                     )
 
-                    let reply = await self.sendPayload(payload)
-                    continuation.resume(returning: reply)
+                    // 🔴 IMPORTANT : on utilise la réponse BRUTE
+                    guard let decoded = await self.sendPayloadRaw(payload) else {
+                        continuation.resume(returning: "Erreur serveur.")
+                        return
+                    }
+
+                    print("🔁 RETRY RESPONSE")
+                    print("   type:", decoded.type ?? "nil")
+                    print("   reply:", decoded.reply ?? "nil")
+
+                    switch decoded.type {
+
+                    // ===============================
+                    // 🟢 RÉPONSE FINALE
+                    // ===============================
+                    case "ANSWER_NOW":
+                        continuation.resume(
+                            returning: decoded.reply ?? "Le coach n’a rien à ajouter."
+                        )
+                        return
+
+                    // ===============================
+                    // ❌ ERREUR LOGIQUE
+                    // ===============================
+                    case "REQUEST_SNAPSHOT":
+                        continuation.resume(
+                            returning: "Erreur interne : snapshot demandé en boucle."
+                        )
+                        return
+
+                    // ===============================
+                    // ⚠️ CAS INATTENDU
+                    // ===============================
+                    default:
+                        continuation.resume(
+                            returning: "Réponse non reconnue du coach."
+                        )
+                        return
+                    }
                 }
             }
         }
     }
+
 
 
     func requestSnapshotBatchAndRetry(

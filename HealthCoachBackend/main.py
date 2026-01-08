@@ -9,12 +9,10 @@ from agent import (
     factual_response,
     summary_response,
 )
-from services.comparisons import resolve_intent, infer_period_context_from_keys
 from services.intent import (
     apply_backend_overrides,
     route_decision,
 )
-
 from services.periods import snapshot_matches_iso
 
 app = FastAPI()
@@ -60,23 +58,22 @@ def chat(req: ChatRequest):
         if req_start and req_end:
             if snapshot_matches_iso(req.snapshot, req_start, req_end):
                 print("🟢 SNAPSHOT EXACT — RÉPONSE DIRECTE (NO LLM)")
-                return (
-                    summary_response(req.snapshot)
-                    if reply_mode == "SUMMARY"
-                    else factual_response(req.snapshot, metric)
-                )
+
+                if reply_mode == "SUMMARY":
+                    reply = summary_response(req.snapshot)["reply"]
+                else:
+                    reply = factual_response(req.snapshot, metric)["reply"]
+
+                return {
+                    "type": "ANSWER_NOW",
+                    "reply": reply,
+                }
 
     # ======================================================
     # 🔴 COMPARAISON FINALE — PRIORITÉ ABSOLUE
-    # (snapshots + meta déjà fournis)
     # ======================================================
     if req.snapshots is not None and req.meta is not None:
         print("🟢 COMPARAISON FINALE — SNAPSHOTS PRÉSENTS")
-
-        if not req.snapshots:
-            raise HTTPException(
-                status_code=400, detail="snapshots manquant pour comparaison"
-            )
 
         left = req.snapshots.left
         right = req.snapshots.right
@@ -108,7 +105,10 @@ def chat(req: ChatRequest):
             right_period=(right.period.start, right.period.end),
         )
 
-        return {"reply": reply}
+        return {
+            "type": "ANSWER_NOW",
+            "reply": reply,
+        }
 
     # ======================================================
     # 🔵 FLOW NORMAL — ANALYSE + VERROUS BACKEND
@@ -126,4 +126,27 @@ def chat(req: ChatRequest):
     # ======================================================
     # 🧭 ROUTING CENTRALISÉ
     # ======================================================
-    return route_decision(req, decision)
+    result = route_decision(req, decision)
+
+    # ======================================================
+    # 🔒 PASS-THROUGH DES REQUEST_* (CRITIQUE)
+    # ======================================================
+    if isinstance(result, dict) and result.get("type", "").startswith("REQUEST_"):
+        return result
+
+    # ======================================================
+    # 🟢 RÉPONSE FINALE NORMALISÉE
+    # ======================================================
+    if isinstance(result, dict) and "reply" in result:
+        return {
+            "type": result.get("type", "ANSWER_NOW"),
+            "reply": result["reply"],
+        }
+
+    # ======================================================
+    # ❌ FALLBACK ABSOLU
+    # ======================================================
+    return {
+        "type": "ANSWER_NOW",
+        "reply": "Une erreur inattendue est survenue.",
+    }

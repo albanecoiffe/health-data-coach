@@ -301,6 +301,45 @@ def snapshot_matches_period(snapshot, start: date, end: date) -> bool:
 
 
 def route_decision(req: ChatRequest, decision: dict):
+    """
+    Orchestrateur central.
+    Règle absolue :
+    - ANSWER_NOW = réponse immédiate, aucune redécision
+    - REQUEST_* = soit réponse directe si snapshot match, soit REQUEST_SNAPSHOT
+    """
+
+    # ======================================================
+    # 🛑 ANSWER_NOW = RÉPONSE IMMÉDIATE, AUCUNE REDÉCISION
+    # ======================================================
+    if decision.get("type") == "ANSWER_NOW":
+        answer_mode = decision.get("answer_mode")
+        metric = decision.get("metric", "DISTANCE")
+
+        print("🟢 ANSWER_NOW")
+        print("   mode:", answer_mode)
+        print("   metric:", metric)
+
+        if answer_mode == "FACTUAL":
+            return {
+                "type": "ANSWER_NOW",
+                "reply": factual_response(req.snapshot, metric)["reply"],
+            }
+
+        if answer_mode == "SMALL_TALK":
+            return {
+                "type": "ANSWER_NOW",
+                "reply": answer_with_snapshot(req.message, req.snapshot),
+            }
+
+        # fallback sécurisé
+        return {
+            "type": "ANSWER_NOW",
+            "reply": answer_with_snapshot(req.message, req.snapshot),
+        }
+
+    # ======================================================
+    # CONTEXTE GÉNÉRAL
+    # ======================================================
     decision_type = decision.get("type")
     metric = decision.get("metric") or "DISTANCE"
 
@@ -309,15 +348,29 @@ def route_decision(req: ChatRequest, decision: dict):
         k in msg for k in ["bilan", "resume", "résumé", "recap", "synthese", "stat"]
     )
 
+    print("🧠 ROUTE DECISION")
+    print("   type:", decision_type)
+    print("   metric:", metric)
+    print("   wants_summary:", wants_summary)
+
     # ======================================================
     # 🔒 ANNÉE — SNAPSHOT STRICT
     # ======================================================
     if decision_type in ["REQUEST_YEAR", "REQUEST_YEAR_RELATIVE"]:
         start, end = resolve_period_from_decision(decision, req.message)
 
-        if snapshot_matches_period(req.snapshot, start, end):
-            return summary_response(req.snapshot)
+        print("🟦 REQUEST_YEAR")
+        print("   requested:", start, "→", end)
+        print("   snapshot :", req.snapshot.period.start, "→", req.snapshot.period.end)
 
+        if snapshot_matches_period(req.snapshot, start, end):
+            print("✅ SNAPSHOT MATCH (YEAR)")
+            return {
+                "type": "ANSWER_NOW",
+                "reply": summary_response(req.snapshot)["reply"],
+            }
+
+        print("📤 REQUEST SNAPSHOT (YEAR)")
         return {
             "type": "REQUEST_SNAPSHOT",
             "period": {
@@ -326,38 +379,86 @@ def route_decision(req: ChatRequest, decision: dict):
             },
             "meta": {
                 "metric": metric,
-                "requested_start": start.isoformat(),
-                "requested_end": end.isoformat(),
-                "reply_mode": "SUMMARY",  # 🔥 LA LIGNE MANQUANTE
+                "reply_mode": "SUMMARY",
             },
         }
 
     # ======================================================
-    # 🔒 SUMMARY PUR = période courante UNIQUEMENT
-    # (aucune résolution de période ici)
+    # 🔒 SUMMARY PUR (période courante uniquement)
     # ======================================================
     if decision_type == "SUMMARY":
-        return summary_response(req.snapshot)
+        print("🟢 SUMMARY CURRENT PERIOD")
+        return {
+            "type": "ANSWER_NOW",
+            "reply": summary_response(req.snapshot)["reply"],
+        }
 
     # ======================================================
-    # 🔒 SEMAINES / MOIS — SNAPSHOT STRICT
+    # 🔒 SEMAINE — SNAPSHOT STRICT (OFFSET AWARE)
     # ======================================================
-    if decision_type in ["REQUEST_WEEK", "REQUEST_MONTH", "REQUEST_MONTH_RELATIVE"]:
+    if decision_type == "REQUEST_WEEK":
+        offset = decision.get("offset", 0)
         start, end = resolve_period_from_decision(decision, req.message)
 
-        if snapshot_matches_period(req.snapshot, start, end):
-            # ⚠️ AUCUNE redécision possible ici
-            if wants_summary:
-                return summary_response(req.snapshot)
-            return factual_response(req.snapshot, metric)
+        print("🟦 REQUEST_WEEK")
+        print("   offset:", offset)
+        print("   requested:", start, "→", end)
+        print("   snapshot :", req.snapshot.period.start, "→", req.snapshot.period.end)
 
+        if snapshot_matches_period(req.snapshot, start, end):
+            print("✅ SNAPSHOT MATCH (WEEK)")
+            return {
+                "type": "ANSWER_NOW",
+                "reply": factual_response(req.snapshot, metric)["reply"],
+            }
+
+        print("📤 REQUEST SNAPSHOT (WEEK)")
         return {
             "type": "REQUEST_SNAPSHOT",
-            "period": {"start": start.isoformat(), "end": end.isoformat()},
+            "period": {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+            },
             "meta": {
                 "metric": metric,
+                "reply_mode": "FACTUAL",
                 "requested_start": start.isoformat(),
                 "requested_end": end.isoformat(),
+                "requested_offset": str(offset),
+            },
+        }
+
+    # ======================================================
+    # 🔒 MOIS — SNAPSHOT STRICT
+    # ======================================================
+    if decision_type in ["REQUEST_MONTH", "REQUEST_MONTH_RELATIVE"]:
+        start, end = resolve_period_from_decision(decision, req.message)
+
+        print("🟦 REQUEST_MONTH")
+        print("   requested:", start, "→", end)
+        print("   snapshot :", req.snapshot.period.start, "→", req.snapshot.period.end)
+
+        if snapshot_matches_period(req.snapshot, start, end):
+            print("✅ SNAPSHOT MATCH (MONTH)")
+            if wants_summary:
+                return {
+                    "type": "ANSWER_NOW",
+                    "reply": summary_response(req.snapshot)["reply"],
+                }
+            return {
+                "type": "ANSWER_NOW",
+                "reply": factual_response(req.snapshot, metric)["reply"],
+            }
+
+        print("📤 REQUEST SNAPSHOT (MONTH)")
+        return {
+            "type": "REQUEST_SNAPSHOT",
+            "period": {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+            },
+            "meta": {
+                "metric": metric,
                 "reply_mode": "SUMMARY" if wants_summary else "FACTUAL",
             },
         }
@@ -366,18 +467,27 @@ def route_decision(req: ChatRequest, decision: dict):
     # 🟣 COMPARAISONS
     # ======================================================
     if decision_type == "COMPARE_PERIODS":
+        print("🟣 COMPARE_PERIODS")
         return build_compare_request(decision, metric)
 
     # ======================================================
-    # 🟢 FACTUAL DIRECT
+    # 🟢 FACTUAL DIRECT (sécurité)
     # ======================================================
     if decision.get("answer_mode") == "FACTUAL":
-        return factual_response(req.snapshot, metric)
+        print("🟢 FACTUAL FALLBACK")
+        return {
+            "type": "ANSWER_NOW",
+            "reply": factual_response(req.snapshot, metric)["reply"],
+        }
 
     # ======================================================
-    # 💬 COACHING / SMALL TALK
+    # 💬 COACHING / SMALL TALK (fallback final)
     # ======================================================
-    return {"reply": answer_with_snapshot(req.message, req.snapshot)}
+    print("💬 SMALL TALK FALLBACK")
+    return {
+        "type": "ANSWER_NOW",
+        "reply": answer_with_snapshot(req.message, req.snapshot),
+    }
 
 
 def build_compare_request(decision: dict, metric: str):
