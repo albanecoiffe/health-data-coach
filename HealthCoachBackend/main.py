@@ -12,6 +12,7 @@ from agent import (
 from services.intent import (
     apply_backend_overrides,
     route_decision,
+    compute_intensity_split,
 )
 from services.periods import snapshot_matches_iso
 
@@ -78,9 +79,10 @@ def chat(req: ChatRequest):
         left = req.snapshots.left
         right = req.snapshots.right
 
-        raw_delta_distance = right.totals.distance_km - left.totals.distance_km
-        raw_delta_duration = right.totals.duration_min - left.totals.duration_min
-        raw_delta_sessions = right.totals.sessions - left.totals.sessions
+        # 🔢 CALCULS STRICTEMENT BACKEND
+        raw_delta_distance = left.totals.distance_km - right.totals.distance_km
+        raw_delta_duration = left.totals.duration_min - right.totals.duration_min
+        raw_delta_sessions = left.totals.sessions - right.totals.sessions
 
         trend = (
             "UP"
@@ -91,23 +93,66 @@ def chat(req: ChatRequest):
         )
 
         delta = {
-            "distance_km": round(abs(raw_delta_distance), 1),
-            "duration_min": round(abs(raw_delta_duration)),
-            "sessions": abs(raw_delta_sessions),
+            "distance_km": round(raw_delta_distance, 1),
+            "duration_min": round(raw_delta_duration),
+            "sessions": raw_delta_sessions,
             "trend": trend,
         }
+        # ❤️ INTENSITÉ — CALCUL BACKEND
+        left_intensity = compute_intensity_split(left)
+        right_intensity = compute_intensity_split(right)
 
-        reply = comparison_response_agent(
+        if left_intensity and right_intensity:
+            intensity_delta = {
+                "low_pct": round(
+                    left_intensity["low_pct"] - right_intensity["low_pct"], 1
+                ),
+                "high_pct": round(
+                    left_intensity["high_pct"] - right_intensity["high_pct"], 1
+                ),
+            }
+        else:
+            intensity_delta = None
+
+        print("📊 DELTA CALCULÉ :", delta)
+
+        # 🧱 BLOC MÉTRIQUES DÉTERMINISTE (JAMAIS LLM)
+        metrics_block = (
+            f"🏃 Distance : {delta['distance_km']} km\n"
+            f"⏱️ Durée : {delta['duration_min']} minutes\n"
+            f"📆 Séances : {delta['sessions']}\n"
+        )
+        if intensity_delta:
+            intensity_block = (
+                "❤️ Intensité\n"
+                f"- 🟢 Z1–Z3 : {intensity_delta['low_pct']} %\n"
+                f"- 🔴 Z4–Z5 : {intensity_delta['high_pct']} %\n"
+            )
+        else:
+            intensity_block = ""
+        print(
+            f"🧪 CHECK COMPARISON | LEFT={left.totals.distance_km} km | "
+            f"RIGHT={right.totals.distance_km} km | RAW_DELTA={raw_delta_distance}"
+        )
+
+        # 🧠 TEXTE HUMAIN (LLM, SANS CHIFFRES)
+        narrative_text = comparison_response_agent(
             message=req.message,
             metric=req.meta.get("metric", "DISTANCE"),
             delta=delta,
             left_period=(left.period.start, left.period.end),
             right_period=(right.period.start, right.period.end),
+            period_context=req.meta.get("period_context"),
+        )
+
+        # 🧩 ASSEMBLAGE FINAL
+        final_reply = f"{narrative_text}\n\n{metrics_block}" + (
+            f"\n\n{intensity_block}" if intensity_block else ""
         )
 
         return {
             "type": "ANSWER_NOW",
-            "reply": reply,
+            "reply": final_reply,
         }
 
     # ======================================================
