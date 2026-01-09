@@ -45,3 +45,22 @@ struct WeeklySnapshot: Codable {
     let longestRunKm: Double?
 
 }
+
+extension WeeklySnapshot {
+
+    func zonePct(_ zone: String) -> Double {
+        zonesPercent[zone] ?? 0
+    }
+
+    var z1z3Pct: Double {
+        zonePct("z1") + zonePct("z3")
+    }
+
+    var z4z5Pct: Double {
+        zonePct("z4") + zonePct("z5")
+    }
+
+    var weekHasRuns: Bool {
+        totals.sessions > 0
+    }
+}

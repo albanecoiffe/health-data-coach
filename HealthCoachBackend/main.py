@@ -16,6 +16,8 @@ from services.intent import (
 )
 from services.periods import snapshot_matches_iso
 
+from services.memory import store_signature
+
 app = FastAPI()
 
 
@@ -46,6 +48,19 @@ def chat(req: ChatRequest):
     print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
     print("🔥 snapshots =", req.snapshots)
     print("🔥 meta =", req.meta)
+
+    session_id = (req.meta or {}).get("session_id")
+    # ======================================================
+    # 🧠 SIGNATURE INGESTION
+    # ======================================================
+    if req.signature and session_id:
+        store_signature(session_id, req.signature.model_dump())
+
+    signature = req.signature
+    session_id = req.meta.get("session_id")
+    if signature:
+        print("🧠 SIGNATURE RECEIVED")
+        store_signature(session_id, signature)
 
     # ======================================================
     # 🔒 SNAPSHOT EXACT DÉJÀ FOURNI → RÉPONSE DIRECTE

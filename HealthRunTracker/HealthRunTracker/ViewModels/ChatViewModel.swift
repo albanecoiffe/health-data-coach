@@ -30,11 +30,11 @@ class ChatViewModel: ObservableObject {
     private let sessionId = UUID().uuidString
     @Published var messages: [ChatMessage] = []
     @Published var currentInput: String = ""
-
     private let healthManager: HealthManager
 
     init(healthManager: HealthManager) {
         self.healthManager = healthManager
+        healthManager.buildRunnerSignatureIfNeeded()
     }
 
     func sendMessage() {
@@ -83,7 +83,8 @@ class ChatViewModel: ObservableObject {
                         let payload = ChatRequest(
                             message: message,
                             snapshot: snapshot,
-                            meta: meta
+                            meta: meta,
+                            signature: self.healthManager.runnerSignature
                         )
 
                         var req = URLRequest(url: url)
@@ -287,7 +288,8 @@ class ChatViewModel: ObservableObject {
                     let payload = ChatRequest(
                         message: message,
                         snapshot: snapshot,
-                        meta: finalMeta
+                        meta: finalMeta,
+                        signature: self.healthManager.runnerSignature
                     )
 
                     // 🔴 IMPORTANT : on utilise la réponse BRUTE
@@ -382,7 +384,8 @@ class ChatViewModel: ObservableObject {
                                     left: leftSnapshot,
                                     right: rightSnapshot
                                 ),
-                                meta: finalMeta
+                                meta: finalMeta,
+                                signature: self.healthManager.runnerSignature
                             )
 
                             let decoded = await self.sendPayloadRaw(payload)
@@ -411,7 +414,8 @@ class ChatViewModel: ObservableObject {
                                 left: leftSnapshot,
                                 right: rightSnapshot
                             ),
-                            meta: finalMeta
+                            meta: finalMeta,
+                            signature: self.healthManager.runnerSignature
                         )
 
                         let decoded = await self.sendPayloadRaw(payload)
@@ -423,5 +427,24 @@ class ChatViewModel: ObservableObject {
             }
         }
     }
+    
+    func debugRunnerSignature() {
+
+        healthManager.makeWeeklySnapshots(weeks: 52) { weeklySnapshots in
+
+            print("🧪 SNAPSHOTS COUNT:", weeklySnapshots.count)
+
+            if let signature = RunnerSignatureBuilder.build(from: weeklySnapshots) {
+
+                print("✅ RUNNER SIGNATURE")
+                dump(signature)
+
+            } else {
+                print("❌ SIGNATURE BUILD FAILED")
+            }
+        }
+    }
+    
+
 
 }

@@ -4,6 +4,7 @@ from services.llm import call_ollama
 import calendar
 import json
 from services.memory import get_memory, add_to_memory
+from services.memory import get_signature
 
 
 def analyze_question(message: str, current_period: tuple[str, str]) -> dict:
@@ -381,25 +382,41 @@ def answer_with_snapshot(message: str, snapshot, session_id: str) -> str:
     if history:
         memory_text = "\n".join(f"{m['role']}: {m['content']}" for m in history)
 
+    signature = get_signature(session_id)
+
+    signature_text = ""
+    if signature:
+        signature_text = f"""
+    PROFIL LONG TERME DU COUREUR (12 derniers mois) :
+    {json.dumps(signature.model_dump(), indent=2)}
+    """
+
+    print("\n🧠 SIGNATURE DEBUG")
+    if signature:
+        print(json.dumps(signature.model_dump(), indent=2))
+    else:
+        print("❌ Aucune signature pour cette session")
+
     prompt = f"""
 Tu es un coach de course à pied humain et bienveillant.
-Conversation récente (si elle existe) :
-{memory_text}
+{signature_text}
 
 RÈGLES :
 - Small talk → réponse courte, empathique, naturelle
-- Coaching → tu peux utiliser les données ci-dessous
+- Coaching → tu peux t’appuyer sur les données fournies
 - Ne répète PAS une salutation si la conversation est déjà entamée
 - Ne redémarre PAS la conversation à zéro
 - Ne poses PAS de question générique si le contexte est clair
 - Ne fais AUCUN calcul
 - Ne modifies AUCUN chiffre
+- Ne tires AUCUNE conclusion définitive
 
-
-DONNÉES :
-- Distance : {snapshot.totals.distance_km}
+━━━━━━━━━━━━━━━━━━━━━━
+DONNÉES PÉRIODE COURANTE
+━━━━━━━━━━━━━━━━━━━━━━
+- Distance : {snapshot.totals.distance_km} km
 - Séances : {snapshot.totals.sessions}
-- Durée : {snapshot.totals.duration_min}
+- Durée : {snapshot.totals.duration_min} min
 - Charge ratio : {snapshot.training_load.ratio if snapshot.training_load else "N/A"}
 
 Question :
