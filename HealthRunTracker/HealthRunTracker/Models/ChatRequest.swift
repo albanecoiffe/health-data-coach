@@ -14,16 +14,19 @@ struct ChatRequest: Codable {
     // 🔁 Comparaison (optionnelle)
     let snapshots: SnapshotPair?
     let meta: [String: String]?
+    let signature: RunnerSignature?
 
     init(
         message: String,
         snapshot: WeeklySnapshot,
         snapshots: SnapshotPair? = nil,
-        meta: [String: String]? = nil
+        meta: [String: String]? = nil,
+        signature: RunnerSignature? = nil
     ) {
         self.message = message
         self.snapshot = snapshot
         self.snapshots = snapshots
         self.meta = meta
+        self.signature = signature
     }
 }
