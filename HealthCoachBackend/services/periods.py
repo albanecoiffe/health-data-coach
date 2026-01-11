@@ -5,6 +5,13 @@ import re
 from datetime import date, timedelta
 import calendar
 import unicodedata
+import spacy
+
+from nltk.stem.snowball import FrenchStemmer
+
+_stemmer = FrenchStemmer()
+
+nlp = spacy.load("fr_core_news_sm")
 
 
 def period_to_dates(period_key: str):
@@ -145,6 +152,19 @@ def normalize(text: str) -> str:
     text = text.replace("–", "-").replace("—", "-")
 
     return text
+
+
+def normalize_lemma(lemma: str) -> str:
+    # féminin / pluriel simples
+    if lemma.endswith("e"):
+        lemma = lemma[:-1]
+    if lemma.endswith("s"):
+        lemma = lemma[:-1]
+    return lemma
+
+
+def lemmatize(text: str) -> list[str]:
+    return [_stemmer.stem(w) for w in text.split() if len(w) > 2]
 
 
 def snapshot_matches_iso(snapshot, start_iso: str, end_iso: str) -> bool:

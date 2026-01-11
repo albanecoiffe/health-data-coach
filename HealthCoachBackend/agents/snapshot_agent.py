@@ -32,6 +32,10 @@ def answer_with_snapshot(message: str, snapshot, session_id: str) -> str:
     else:
         print("❌ Aucune signature pour cette session")
 
+    # print signature_text pour debug
+    print("\n🧠 SIGNATURE TEXT DEBUG")
+    print(signature_text)
+
     prompt = f"""
 Tu es un coach de course à pied humain, bienveillant et naturel.
 Conversation récente (si elle existe) : {memory_text}
