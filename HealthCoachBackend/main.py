@@ -3,12 +3,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from schemas import ChatRequest
-from agent import (
-    analyze_question,
-    comparison_response_agent,
-    factual_response,
-    summary_response,
-)
+
+from agents.comparison_agent import comparison_response_agent
+from agents.summary_agent import summary_response
+from agents.factual_agent import factual_response
+from agents.questions_agent import analyze_question
+
 from services.intent import (
     apply_backend_overrides,
     route_decision,

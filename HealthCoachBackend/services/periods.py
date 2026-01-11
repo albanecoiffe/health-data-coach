@@ -266,3 +266,13 @@ def resolve_period_from_decision(decision: dict, message: str):
     # ❌ Aucune période
     # ======================
     return None, None
+
+
+def format_period_for_display(start_iso: str, end_iso: str) -> tuple[str, str]:
+    """
+    start inclus
+    end exclus → affichage end - 1 jour
+    """
+    start = date.fromisoformat(start_iso)
+    end = date.fromisoformat(end_iso) - timedelta(days=1)
+    return start.isoformat(), end.isoformat()

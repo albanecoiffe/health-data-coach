@@ -2,7 +2,15 @@ from services.periods import normalize
 import re
 from datetime import date, timedelta
 import calendar
-from agent import factual_response, summary_response, answer_with_snapshot
+
+from agents.factual_agent import factual_response
+from agents.factual_agent import factual_response
+from agents.snapshot_agent import answer_with_snapshot
+from agents.small_talks_agent import answer_small_talk
+from agents.questions_agent import analyze_question
+from agents.summary_agent import summary_response
+
+from agents.coaching_agent import answer_coaching
 from schemas import ChatRequest
 from services.periods import (
     period_to_dates,
@@ -207,12 +215,27 @@ def route_decision(req: ChatRequest, decision: dict):
     if decision.get("type") == "ANSWER_NOW":
         answer_mode = decision.get("answer_mode", "FACTUAL")
 
+        print(f"🧭 ROUTING ANSWER_MODE = {answer_mode}")
+
+        if answer_mode == "SMALL_TALK":
+            return {
+                "type": "ANSWER_NOW",
+                "reply": answer_small_talk(req.message, session_id),
+            }
+
         if answer_mode == "FACTUAL":
             return {
                 "type": "ANSWER_NOW",
                 "reply": factual_response(req.snapshot, metric)["reply"],
             }
 
+        if answer_mode == "COACHING":
+            return {
+                "type": "ANSWER_NOW",
+                "reply": answer_coaching(req.message, req.snapshot, session_id),
+            }
+
+        # fallback (small talk ou sécurité)
         return {
             "type": "ANSWER_NOW",
             "reply": answer_with_snapshot(req.message, req.snapshot, session_id),
