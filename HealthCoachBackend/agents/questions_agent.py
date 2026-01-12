@@ -83,6 +83,7 @@ Retourne :
 ========================================
 3 - CHANGEMENT DE PÉRIODE — MOIS RELATIFS (PRIORITÉ ABSOLUE)
 ========================================
+(APPLICABLE UNIQUEMENT SI LE MOT "mois" EST PRÉSENT)
 
 Si la question contient EXACTEMENT :
 
@@ -202,6 +203,14 @@ Retourne :
   "metric": "<métrique détectée>"
 }}
 
+RÈGLE CRITIQUE :
+
+- "il y a X semaines" → TOUJOURS REQUEST_WEEK
+- "il y a X mois"     → REQUEST_MONTH_RELATIVE
+- "il y a X ans"      → REQUEST_YEAR_RELATIVE
+
+L’unité temporelle explicite a TOUJOURS priorité
+sur toute autre règle.
 ========================================
 9 - PROFIL / HABITUDES LONG TERME (PRIORITÉ ABSOLUE)
 ========================================
