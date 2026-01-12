@@ -43,11 +43,18 @@ Retourne EXACTEMENT :
 ========================================
 2 - CHANGEMENT DE PÉRIODE — SEMAINES
 ========================================
+Si la question contient une référence à une semaine RELATIVE
+(par rapport à aujourd’hui), tu DOIS utiliser REQUEST_WEEK.
 
 Si la question contient :
+- "la semaine dernière"
+- "semaine dernière"
+→ offset = -1
 
-- "semaine dernière" → offset = -1
-- "il y a X semaines" → offset = -X
+Si la question contient :
+- "il y a X semaines"
+- "il y a X semaine"
+→ offset = -X
 
 Retourne :
 {{
@@ -56,7 +63,7 @@ Retourne :
   "metric": "<métrique détectée>"
 }}
 
-⚠️ Même si la question parle de km, durée, séances, etc.
+ Même si la question parle de km, durée, séances, etc.
 
 ----------------------------------------
 SEMAINE COURANTE
@@ -273,19 +280,57 @@ Retourne :
   "right": "<période B>"
 }}
 
-Exemples :
+========================================
+8 - COMPARAISONS (PRIORITÉ HAUTE)
+========================================
 
-"Est-ce que j’ai couru plus que la semaine dernière ?"
-→
+Si la question compare deux périodes
+(ex: "plus que", "moins que", "autant que", "comparé à", "par rapport à") :
+
+Retourne :
 {{
-   "type": "COMPARE_PERIODS",
-  "metric": "DISTANCE",
-  "left": "CURRENT_WEEK",
-  "right": "PREVIOUS_WEEK"
+        "type": "COMPARE_PERIODS",
+  "metric": "<métrique détectée>",
+  "left": <période A>,
+  "right": <période B>
 }}
 
+========================================
+RÈGLE ABSOLUE — SEMAINES (CRITIQUE)
+========================================
+
+Pour TOUTE comparaison impliquant des semaines,
+tu DOIS utiliser EXCLUSIVEMENT des offsets numériques.
+
+FORMAT OBLIGATOIRE :
+{{
+  "offset": <entier négatif ou zéro>
+}}
+
+INTERDIT ABSOLUMENT :
+- strings ("CURRENT_WEEK", "PREVIOUS_WEEK", etc.)
+- noms inventés
+- périodes glissantes
+- objets avec "unit"
+
+MAPPING OBLIGATOIRE :
+- "cette semaine"        → {{"offset": 0 }}
+- "la semaine dernière"  → {{"offset": -1 }}
+- "il y a 2 semaines"    → {{"offset": -2 }}
+
+EXEMPLE :
+" Ai-je couru plus la semaine dernière que il y a 3 semaines ? "
+{{
+  "type": "COMPARE_PERIODS",
+  "metric": "DISTANCE",
+  "left": {{"offset": -1 }},
+  "right": {{"offset": -3 }}
+}}
+========================================
+EXEMPLES DE COMPARAISONS
+========================================
+
 "Est-ce que je fais plus de séances ce mois-ci ?"
-→
 {{
    "type": "COMPARE_PERIODS",
   "metric": "SESSIONS",
@@ -295,7 +340,6 @@ Exemples :
 
 Si la question contient :
 - "ce mois par rapport au mois dernier"
-→
 {{
    "type": "COMPARE_PERIODS",
   "metric": "<metric>",
@@ -305,7 +349,6 @@ Si la question contient :
 
 Si la question contient :
 - "les deux dernières semaines"
-→
 {{
         "type": "COMPARE_PERIODS",
   "metric": "<metric>",
@@ -315,7 +358,6 @@ Si la question contient :
 
 Si la question compare deux années explicites
 (ex: "2025 avec 2024", "année 2023 par rapport à 2022") :
-
 Retourne :
 {{
   "type": "COMPARE_PERIODS",
@@ -323,7 +365,6 @@ Retourne :
   "left": "YEAR_2025",
   "right": "YEAR_2024"
 }}
-
 
 ========================================
 9 - BILAN / RÉSUMÉ (PRIORITÉ HAUTE)

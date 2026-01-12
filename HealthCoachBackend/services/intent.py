@@ -21,12 +21,6 @@ from services.periods import (
 from services.comparisons import infer_period_context_from_keys
 from fastapi import HTTPException
 
-LABELS = {
-    "CURRENT_WEEK": "cette semaine",
-    "PREVIOUS_WEEK": "la semaine dernière",
-    "CURRENT_MONTH": "ce mois-ci",
-    "PREVIOUS_MONTH": "le mois dernier",
-}
 
 MONTHS = {
     "janvier": 1,
@@ -279,6 +273,14 @@ def route_decision(req: ChatRequest, decision: dict):
     }
 
 
+def resolve_week(offset: int):
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    start = week_start + timedelta(days=7 * offset)
+    end = start + timedelta(days=7)
+    return start, end
+
+
 def build_compare_request(decision: dict, metric: str):
     """
     Construit une requête REQUEST_SNAPSHOT_BATCH
@@ -297,8 +299,6 @@ def build_compare_request(decision: dict, metric: str):
 
     meta = {
         "metric": metric,
-        "left_label": LABELS.get(left_key, "période 1"),
-        "right_label": LABELS.get(right_key, "période 2"),
     }
 
     if period_context is not None:
@@ -316,7 +316,12 @@ def build_compare_request(decision: dict, metric: str):
                 "end": right_end.isoformat(),
             },
         },
-        "meta": meta,
+        "meta": {
+            "metric": metric,
+            "period_context": period_context,
+            "left_label": "période 1",
+            "right_label": "période 2",
+        },
     }
 
 
