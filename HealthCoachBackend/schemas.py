@@ -110,6 +110,22 @@ class RegularitySignature(BaseModel):
     longest_break_days: int
 
 
+class RobustnessSignature(BaseModel):
+    injury_free_weeks_pct: float
+    max_consecutive_weeks: int
+    breaks_over_7d_count: int = Field(alias="breaks_over7d_count")
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+class AdaptationSignature(BaseModel):
+    load_std_trend_12w_pct: float = Field(alias="load_std_trend12w_pct")
+
+    class Config:
+        allow_population_by_field_name = True
+
+
 class RunnerSignature(BaseModel):
     period: SignaturePeriod
     volume: VolumeSignature
@@ -118,6 +134,8 @@ class RunnerSignature(BaseModel):
     intensity: IntensitySignature
     load: LoadSignature
     regularity: RegularitySignature
+    robustness: RobustnessSignature
+    adaptation: AdaptationSignature
 
 
 # ======================================================
@@ -128,6 +146,4 @@ class ChatRequest(BaseModel):
     snapshot: Snapshot
     snapshots: Optional[SnapshotBatchPayload] = None
     meta: Optional[Dict[str, str]] = None
-
-    # 🆕 PROFIL LONG TERME
     signature: Optional[RunnerSignature] = None

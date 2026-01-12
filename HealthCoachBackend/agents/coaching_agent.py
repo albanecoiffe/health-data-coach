@@ -3,6 +3,7 @@ from services.coaching.rules import (
     analyze_regularity,
     analyze_volume,
     analyze_load,
+    analyze_progress,
 )
 from services.memory import get_memory
 from services.llm import call_ollama
@@ -34,6 +35,9 @@ def answer_coaching(message: str, snapshot, session_id: str) -> str:
     if not coaching_type:
         return "Je peux t’aider, mais je ne suis pas sûr de ce que tu veux analyser."
 
+    print(
+        "🧠 Signature utilisée pour le coaching :", json.dumps(signature_dict, indent=2)
+    )
     # ======================================================
     # 🧠 PROMPT GÉNÉRAL
     # ======================================================
@@ -74,6 +78,11 @@ PROFIL LONG TERME DU COUREUR
 
         specific_prompt = build_load_prompt(message, facts, already_started)
 
+    elif coaching_type == "PROGRESS":
+        facts = analyze_progress(signature_dict)
+        print("📊 Facts PROGRESS :", facts)
+        specific_prompt = build_progress_prompt(message, facts, already_started)
+
     else:
         return "Je ne suis pas sûr de ce que tu veux analyser."
 
@@ -105,35 +114,56 @@ FAITS DE CHARGE (CALCULÉS PAR LE SYSTÈME)
 ━━━━━━━━━━━━━━━━━━━━━━
 LEXIQUE — CHARGE (OBLIGATOIRE)
 ━━━━━━━━━━━━━━━━━━━━━━
-- weekly_avg_load : charge moyenne hebdomadaire (≠ distance)
-- weekly_std_load : variabilité de la charge
-- acwr_avg : charge récente / charge habituelle
-- acwr_max : pic ponctuel observé
 
-INTERPRÉTATION AUTORISÉE :
-- acwr proche de 1 → charge cohérente avec l’habitude
-- acwr_max élevé → pics possibles mais ponctuels
-- variabilité élevée → charge moins régulière
+- weekly_avg_load :
+  → charge moyenne supportée chaque semaine sur le long terme  
+  → représente l’effort global habituel, pas une distance
 
-INTERDIT :
-- Ne jamais parler de kilomètres
-- Ne jamais inventer une tendance
-- Ne jamais médicaliser ou diagnostiquer
+- weekly_std_load :
+  → variabilité de la charge d’une semaine à l’autre  
+  → plus la valeur est élevée, moins la charge est régulière
 
-RÈGLE CRITIQUE :
-- weekly_avg_load, weekly_std_load, acwr_* ne sont PAS des distances
-- Tu dois les appeler explicitement "charge" ou "indice de charge"
-- Tu ne dois JAMAIS utiliser l’unité "km" ou "kilomètres"
+- acwr_avg :
+  → rapport entre la charge récente et la charge habituelle  
+  → proche de 1 = charge globalement bien tolérée
+
+- acwr_max :
+  → plus haut pic ponctuel de charge observé  
+  → indique des semaines plus exigeantes, sans dire si elles sont dangereuses
+
+━━━━━━━━━━━━━━━━━━━━━━
+INTERPRÉTATION AUTORISÉE
+━━━━━━━━━━━━━━━━━━━━━━
+- Une charge stable est plus facile à absorber dans le temps
+- Des pics ponctuels peuvent exister sans remettre en cause l’équilibre global
+- L’analyse porte sur la cohérence, pas sur un jugement médical
+
+━━━━━━━━━━━━━━━━━━━━━━
+INTERDIT ABSOLU
+━━━━━━━━━━━━━━━━━━━━━━
+- Ne jamais parler de kilomètres ou de distance
+- Ne jamais utiliser les mots : blessure, risque, danger, surmenage
+- Ne jamais poser de diagnostic
+
+RÈGLE CRITIQUE DE LANGAGE :
+- Ces indicateurs ne sont PAS des distances
+- Tu dois parler de :
+  "charge", "effort global", "niveau d’effort"
+- Tu ne dois JAMAIS utiliser "km" ou "kilomètres"
 
 EXEMPLE CORRECT :
-"une charge moyenne hebdomadaire de 258 unités de charge"
+"une charge moyenne hebdomadaire autour de 260 unités de charge"
+
 EXEMPLE INTERDIT :
-"258 km", "258 kilomètres", "volume de 258 km"
+"260 km", "volume de 260 km"
+
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
 - Mentionne au moins 2 métriques chiffrées
-- Pas de calcul, pas de plan, pas de diagnostic
+- Aucun calcul
+- Aucun plan d’entraînement
+- 3 à 5 phrases maximum
 
 QUESTION :
 {message}
@@ -155,22 +185,35 @@ FAITS DE RÉGULARITÉ
 {json.dumps(facts, indent=2)}
 
 ━━━━━━━━━━━━━━━━━━━━━━
-LEXIQUE — RÉGULARITÉ
+LEXIQUE — RÉGULARITÉ (OBLIGATOIRE)
 ━━━━━━━━━━━━━━━━━━━━━━
-- weeks_with_runs_pct : proportion de semaines avec au moins une séance
-- longest_break_days : plus longue coupure observée
-- weekly_std_sessions : stabilité du nombre de séances
 
-INTERPRÉTATION AUTORISÉE :
-- régularité = constance dans le temps
-- stabilité = peu de variations hebdomadaires
+- weeks_with_runs_pct :
+  → proportion de semaines où au moins une séance a été réalisée  
+  → mesure la continuité dans le temps
+
+- longest_break_days :
+  → durée maximale observée sans courir  
+  → reflète l’existence ou non de ruptures longues
+
+- weekly_std_sessions :
+  → variation du nombre de séances par semaine  
+  → faible valeur = rythme plus stable
+
+━━━━━━━━━━━━━━━━━━━━━━
+INTERPRÉTATION AUTORISÉE
+━━━━━━━━━━━━━━━━━━━━━━
+- La régularité correspond à la constance sur la durée
+- La stabilité reflète la répétition d’un rythme similaire
+- Une interruption ponctuelle n’annule pas une dynamique globale
 
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
-- Mentionne au moins 2 métriques
-- Pas de jugement définitif
-- Pas de plan d’entraînement
+- Mentionne au moins 2 indicateurs chiffrés
+- Aucun jugement définitif
+- Aucun plan d’entraînement
+- 3 à 5 phrases maximum
 
 QUESTION :
 {message}
@@ -192,22 +235,116 @@ FAITS DE VOLUME
 {json.dumps(facts, indent=2)}
 
 ━━━━━━━━━━━━━━━━━━━━━━
-LEXIQUE — VOLUME
+LEXIQUE — VOLUME (OBLIGATOIRE)
 ━━━━━━━━━━━━━━━━━━━━━━
-- weekly_km : volume de la semaine courante
-- habit_km : volume hebdomadaire habituel
-- status : position par rapport à l’habitude
 
-INTERPRÉTATION AUTORISÉE :
-- comparaison semaine vs habitude
-- commentaire de cohérence globale
+- current_week_km :
+  → distance parcourue sur la semaine courante
+
+- weekly_avg_km :
+  → distance moyenne hebdomadaire sur le long terme  
+  → représente l’habitude générale
+
+- weekly_std_km :
+  → variabilité du volume d’une semaine à l’autre  
+  → plus la valeur est élevée, plus le volume fluctue
+
+- trend_12w_pct :
+  → évolution moyenne du volume sur les 12 dernières semaines  
+  → positive = augmentation récente, négative = diminution
+
+━━━━━━━━━━━━━━━━━━━━━━
+INTERPRÉTATION AUTORISÉE
+━━━━━━━━━━━━━━━━━━━━━━
+- Comparaison entre la semaine courante et l’habitude
+- Lecture de la tendance récente sans extrapolation
+- Commentaire de cohérence globale
+
+━━━━━━━━━━━━━━━━━━━━━━
+RÈGLE ABSOLUE DE LANGAGE HUMAIN
+━━━━━━━━━━━━━━━━━━━━━━
+- Tu NE DOIS JAMAIS mentionner de noms de variables techniques
+- Tu dois reformuler chaque indicateur en langage naturel
+
+EXEMPLES INTERDITS :
+- weekly_avg_km
+- trend_12w_pct
 
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
-- Mentionne au moins 2 métriques
+- Mentionne au moins 2 métriques chiffrées
 - Pas de seuils médicaux
 - Pas de plan d’entraînement
+- 3 à 5 phrases maximum
+
+QUESTION :
+{message}
+"""
+
+
+def build_progress_prompt(message, facts, already_started):
+    return f"""
+Tu es un coach de course à pied humain, expérimenté et nuancé.
+Réponds dans la langue du message utilisateur.
+
+RÈGLE ABSOLUE :
+- Si la conversation a déjà commencé ({already_started}),
+  tu NE DOIS PAS saluer.
+
+━━━━━━━━━━━━━━━━━━━━━━
+FAITS LIÉS À LA PROGRESSION
+━━━━━━━━━━━━━━━━━━━━━━
+{json.dumps(facts, indent=2)}
+
+━━━━━━━━━━━━━━━━━━━━━━
+LEXIQUE — PROGRESSION (OBLIGATOIRE)
+━━━━━━━━━━━━━━━━━━━━━━
+
+- trend_12w_pct :
+  → évolution récente du volume sur les 3 derniers mois
+
+- acwr_avg :
+  → capacité moyenne à absorber la charge habituelle
+
+- acwr_max :
+  → pics ponctuels de charge tolérés dans le temps
+
+- weeks_with_runs_pct :
+  → continuité de la pratique sur la durée
+
+- longest_break_days :
+  → existence ou non de ruptures prolongées
+
+━━━━━━━━━━━━━━━━━━━━━━
+INTERPRÉTATION AUTORISÉE
+━━━━━━━━━━━━━━━━━━━━━━
+- La progression ne signifie pas une hausse constante
+- Elle peut se traduire par une meilleure tolérance à l’effort
+- La continuité sans rupture est un signal positif
+
+━━━━━━━━━━━━━━━━━━━━━━
+INTERDIT ABSOLU
+━━━━━━━━━━━━━━━━━━━━━━
+- Ne jamais promettre une progression future
+- Ne jamais parler de performance chiffrée
+- Ne jamais médicaliser
+
+━━━━━━━━━━━━━━━━━━━━━━
+RÈGLES DE RÉPONSE
+━━━━━━━━━━━━━━━━━━━━━━
+- Mentionne AU MOINS 2 indicateurs chiffrés (tu peux en mentionner plus)
+- Parle en termes de tendance, pas de verdict
+- 3 à 5 phrases maximum
+
+- Tu NE DOIS JAMAIS mentionner :
+  - les noms de colonnes
+  - les noms de variables
+  - les clés JSON
+  - les termes techniques internes du système
+SI TU UTILISES UN INDICATEUR :
+- Tu DOIS le reformuler en langage humain
+- Tu DOIS expliquer ce qu’il signifie, pas comment il s’appelle
 
 QUESTION :
 {message}

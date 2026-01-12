@@ -212,6 +212,7 @@ Exemples :
 - "Est-ce que je suis régulier ?"
 - "Est-ce que je cours souvent ?"
 - "J’ai une routine stable ?"
+- "Est-ce que je progesse"
 
 Retourne STRICTEMENT :
 {{
@@ -241,6 +242,8 @@ INTERDIT ABSOLUMENT :
 - MINUTES
 - KMH
 - SPEED
+- PROGRESS
+- PROGRESSION
 
 RÈGLE :
 - "temps", "durée", "time", "heures", "minutes" → DURATION

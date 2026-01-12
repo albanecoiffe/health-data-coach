@@ -33,11 +33,11 @@ final class RunnerSignatureBuilder {
         let volume = RunnerSignature.VolumeSignature(
             weekly_avg_km: avg(distances),
             weekly_std_km: std(distances),
-            trend_12w_pct: trend12WeeksPct(distances)
+            trend_12w_pct: trend12WeeksPctExcludingIncomplete(
+                values: distances,
+                sessions: sorted.map { $0.totals.sessions }
+            ),
         )
-
-        print("📏 Volume avg:", volume.weekly_avg_km)
-        print("📈 Volume trend:", volume.trend_12w_pct)
 
         // -------------------------
         // DURATION
@@ -67,7 +67,10 @@ final class RunnerSignatureBuilder {
 
         let intensity = RunnerSignature.IntensitySignature(
             z4_z5_avg_pct: avg(z4z5),
-            z4_z5_trend_12w_pct: trend12WeeksPct(z4z5),
+            z4_z5_trend_12w_pct: trend12WeeksPctExcludingIncomplete(
+                values: z4z5,
+                sessions: sorted.map { $0.totals.sessions }
+            ),
             z1_z3_avg_pct: avg(z1z3)
         )
 
@@ -79,9 +82,10 @@ final class RunnerSignatureBuilder {
         let acute = Array(loads.suffix(4))
         let chronic = Array(loads.suffix(12))
 
+        let chronicAvg = avg(chronic)
+
         let acwrValues = acute.map { acuteLoad in
-            let chronicAvg = avg(chronic)
-            return chronicAvg > 0 ? acuteLoad / chronicAvg : 0
+            chronicAvg > 0 ? acuteLoad / chronicAvg : 0
         }
 
         let load = RunnerSignature.LoadSignature(
@@ -94,8 +98,9 @@ final class RunnerSignatureBuilder {
         // -------------------------
         // REGULARITY
         // -------------------------
-        let weeksWithRuns = sorted.filter { $0.weekHasRuns }.count
-        let weeksWithRunsPct = Double(weeksWithRuns) / Double(sorted.count) * 100
+        let weeksWithRunsCount = sorted.filter { $0.weekHasRuns }.count
+        let weeksWithRunsPct =
+            Double(weeksWithRunsCount) / Double(sorted.count) * 100
 
         let longestBreak = longestBreakDays(sorted)
 
@@ -104,6 +109,55 @@ final class RunnerSignatureBuilder {
             longestBreakDays: longestBreak
         )
 
+        // -------------------------
+        // ROBUSTNESS
+        // -------------------------
+        let activeWeeksCount = sorted.filter {
+            $0.totals.sessions > 0
+        }.count
+
+        let injuryFreeWeeksPct =
+            Double(activeWeeksCount) / Double(sorted.count) * 100
+
+        var currentStreak = 0
+        var maxStreak = 0
+        var breaksOver7d = 0
+
+        for w in sorted {
+            if w.totals.sessions > 0 {
+                currentStreak += 1
+                maxStreak = max(maxStreak, currentStreak)
+            } else {
+                if currentStreak * 7 >= 7 {
+                    breaksOver7d += 1
+                }
+                currentStreak = 0
+            }
+        }
+
+        let robustness = RunnerSignature.RobustnessSignature(
+            injuryFreeWeeksPct: injuryFreeWeeksPct,
+            maxConsecutiveWeeks: maxStreak,
+            breaksOver7dCount: breaksOver7d
+        )
+
+        // -------------------------
+        // ADAPTATION (charge absorption)
+        // -------------------------
+        let loadStdSeries = sorted.map {
+            $0.trainingLoad?.load7d ?? 0
+        }
+
+        let adaptation = RunnerSignature.AdaptationSignature(
+            loadStdTrend12wPct: trend12WeeksPctExcludingIncomplete(
+                values: loadStdSeries,
+                sessions: sorted.map { $0.totals.sessions }
+            )
+        )
+
+        // -------------------------
+        // FINAL SIGNATURE
+        // -------------------------
         return RunnerSignature(
             period: period,
             volume: volume,
@@ -111,7 +165,9 @@ final class RunnerSignatureBuilder {
             frequency: frequency,
             intensity: intensity,
             load: load,
-            regularity: regularity
+            regularity: regularity,
+            robustness: robustness,
+            adaptation: adaptation
         )
     }
 

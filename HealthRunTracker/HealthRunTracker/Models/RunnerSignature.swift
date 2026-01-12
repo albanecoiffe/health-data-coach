@@ -41,6 +41,16 @@ struct RunnerSignature: Codable {
         let weeksWithRunsPct: Double
         let longestBreakDays: Int
     }
+    
+    struct RobustnessSignature: Codable {
+        let injuryFreeWeeksPct: Double
+        let maxConsecutiveWeeks: Int
+        let breaksOver7dCount: Int
+    }
+    
+    struct AdaptationSignature: Codable {
+        let loadStdTrend12wPct: Double
+    }
 
     let period: PeriodSignature
     let volume: VolumeSignature
@@ -49,4 +59,6 @@ struct RunnerSignature: Codable {
     let intensity: IntensitySignature
     let load: LoadSignature
     let regularity: RegularitySignature
+    let robustness: RobustnessSignature    
+    let adaptation: AdaptationSignature
 }

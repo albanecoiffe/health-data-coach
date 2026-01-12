@@ -89,6 +89,24 @@ SPORT_CONTEXT = {
     "pratiqu",
 }
 
+PROGRESS_STRONG = {
+    "progress",
+    "progression",
+    "support",
+    "supporter",
+    "toler",
+    "tolerance",
+    "mieux",
+    "absorbe",
+    "assimile",
+    "encaisse",
+    "sans_rupture",
+    "ruptur",
+    "evolu",
+    "amelior",
+}
+
+
 # ======================================================
 # ⚙️ DEBUG
 # ======================================================
@@ -115,9 +133,13 @@ def detect_coaching_type(message: str) -> str | None:
         print("🔎 Normalisé    :", msg)
         print("🌱 Stems        :", stems)
 
+    # ======================================================
+    # 📊 SCORING GLOBAL
+    # ======================================================
     scores = {
-        "REGULARITY": score_category(stems, REGULARITY_STRONG, REGULARITY_WEAK),
+        "PROGRESS": score_category(stems, PROGRESS_STRONG, set()),
         "LOAD": score_category(stems, LOAD_STRONG, LOAD_WEAK),
+        "REGULARITY": score_category(stems, REGULARITY_STRONG, REGULARITY_WEAK),
         "VOLUME": score_category(stems, VOLUME_STRONG, VOLUME_WEAK),
     }
 
@@ -127,51 +149,26 @@ def detect_coaching_type(message: str) -> str | None:
             print(f"   - {k:<10} → {v}")
 
     # ======================================================
-    # 🔒 CONTEXTE SPORT (sauf régularité)
+    # 🔒 FILTRE CONTEXTE SPORT
+    # - PROGRESS est AUTORISÉ sans contexte sport
     # ======================================================
     has_sport_context = bool(stems & SPORT_CONTEXT)
-    has_regularity_hint = bool(stems & REGULARITY_STRONG)
 
-    if DEBUG_COACHING:
-        print("🏃 Sport context :", has_sport_context)
-        print("📊 Regularity hint :", has_regularity_hint)
-
-    # ======================================================
-    # 🔒 FILTRE CONTEXTE — INTELLIGENT
-    # ======================================================
-
-    has_strong_signal = (
-        (stems & REGULARITY_STRONG) or (stems & LOAD_STRONG) or (stems & VOLUME_STRONG)
-    )
-
-    if DEBUG_COACHING:
-        print("💡 Strong signal détecté :", bool(has_strong_signal))
-
-    # On bloque UNIQUEMENT si :
-    # - aucun mot fort métier
-    # - ET aucun contexte sport
-    if not has_strong_signal and not has_sport_context:
+    if scores["PROGRESS"] == 0 and not has_sport_context and max(scores.values()) == 0:
         if DEBUG_COACHING:
             print("⛔ Aucun signal métier ni contexte sport → abandon")
         return None
 
     # ======================================================
-    # 🥇 PRIORITÉ MÉTIER
+    # 🥇 PRIORITÉ MÉTIER (ORDRE EXPLICITE)
     # ======================================================
-    if scores["LOAD"] > 0:
-        if DEBUG_COACHING:
-            print("✅ Type retenu : LOAD (priorité métier)")
-        return "LOAD"
+    PRIORITY = ["PROGRESS", "LOAD", "REGULARITY", "VOLUME"]
 
-    if scores["REGULARITY"] > 0:
-        if DEBUG_COACHING:
-            print("✅ Type retenu : REGULARITY")
-        return "REGULARITY"
-
-    if scores["VOLUME"] > 0:
-        if DEBUG_COACHING:
-            print("✅ Type retenu : VOLUME")
-        return "VOLUME"
+    for key in PRIORITY:
+        if scores[key] > 0:
+            if DEBUG_COACHING:
+                print(f"✅ Type retenu : {key}")
+            return key
 
     if DEBUG_COACHING:
         print("⚠️ Aucun type détecté malgré le scoring")
