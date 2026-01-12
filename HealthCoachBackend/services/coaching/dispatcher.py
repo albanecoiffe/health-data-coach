@@ -10,6 +10,7 @@ from services.periods import normalize, lemmatize
 REGULARITY_STRONG = {
     "regulier",
     "regul",
+    "reguli",
     "constanc",
     "constant",
     "const",

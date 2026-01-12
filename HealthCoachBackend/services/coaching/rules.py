@@ -30,10 +30,9 @@ def analyze_volume(snapshot, signature: dict):
 
 
 def analyze_load(snapshot, signature: dict):
-    if not snapshot or not snapshot.training_load:
-        return None
-
     load = signature.get("load", {})
+    if not load:
+        return None
 
     return {
         "weekly_avg_load": load.get("weekly_avg_load"),
