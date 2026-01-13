@@ -42,6 +42,13 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     metric = decision.get("metric", "DISTANCE")
 
     is_summary = re.search(r"\b(bilan|resume|recap|synthese|stat)\b", msg)
+    # MARQUER LES BILANS SANS ÉCRASER LA PÉRIODE
+    if is_summary and decision.get("type", "").startswith("REQUEST_"):
+        return {
+            **decision,
+            "reply_mode": "SUMMARY",
+        }
+
     has_last = re.search(r"\b(dernier|derniere|precedent|precedente)\b", msg)
 
     # ======================================================
@@ -85,7 +92,11 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     # 🔴 1️⃣ BILAN + ANNÉE EXPLICITE
     # ======================================================
     year = extract_year(msg)
-    if is_summary and year is not None:
+    if (
+        is_summary
+        and year is not None
+        and decision.get("type") not in {"REQUEST_MONTH", "REQUEST_WEEK"}
+    ):
         return {
             "type": "REQUEST_YEAR",
             "year": year,
