@@ -65,8 +65,85 @@ class SnapshotBatchPayload(BaseModel):
     right: Snapshot
 
 
+# ======================================================
+# 🧠 RUNNER SIGNATURE (LONG-TERM PROFILE)
+# ======================================================
+
+
+class SignaturePeriod(BaseModel):
+    start: str
+    end: str
+    weeks: int
+
+
+class VolumeSignature(BaseModel):
+    weekly_avg_km: float
+    weekly_std_km: float
+    trend_12w_pct: float
+
+
+class DurationSignature(BaseModel):
+    weekly_avg_min: float
+    weekly_std_min: float
+
+
+class FrequencySignature(BaseModel):
+    weekly_avg_sessions: float
+    weekly_std_sessions: float
+
+
+class IntensitySignature(BaseModel):
+    z4_z5_avg_pct: float
+    z4_z5_trend_12w_pct: float
+    z1_z3_avg_pct: float
+
+
+class LoadSignature(BaseModel):
+    weekly_avg_load: float
+    weekly_std_load: float
+    acwr_avg: float
+    acwr_max: float
+
+
+class RegularitySignature(BaseModel):
+    weeks_with_runs_pct: float
+    longest_break_days: int
+
+
+class RobustnessSignature(BaseModel):
+    injury_free_weeks_pct: float
+    max_consecutive_weeks: int
+    breaks_over_7d_count: int = Field(alias="breaks_over7d_count")
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+class AdaptationSignature(BaseModel):
+    load_std_trend_12w_pct: float = Field(alias="load_std_trend12w_pct")
+
+    class Config:
+        allow_population_by_field_name = True
+
+
+class RunnerSignature(BaseModel):
+    period: SignaturePeriod
+    volume: VolumeSignature
+    duration: DurationSignature
+    frequency: FrequencySignature
+    intensity: IntensitySignature
+    load: LoadSignature
+    regularity: RegularitySignature
+    robustness: RobustnessSignature
+    adaptation: AdaptationSignature
+
+
+# ======================================================
+
+
 class ChatRequest(BaseModel):
     message: str
     snapshot: Snapshot
     snapshots: Optional[SnapshotBatchPayload] = None
     meta: Optional[Dict[str, str]] = None
+    signature: Optional[RunnerSignature] = None

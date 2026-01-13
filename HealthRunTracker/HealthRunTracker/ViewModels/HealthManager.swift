@@ -44,6 +44,7 @@ final class HealthManager: ObservableObject {
     private let healthStore = HKHealthStore()
 
     @Published var weeklyData: [DailyRunData] = []
+    @Published var runnerSignature: RunnerSignature? = nil
     @Published var yearlyData: [MonthlyRunData] = []
     @Published var weeklyZoneBreakdown: [SessionZoneBreakdown] = []
 
@@ -1009,21 +1010,21 @@ extension HealthManager {
         to endDate: Date,
         completion: @escaping (WeeklySnapshot) -> Void
     ) {
-        
+
         fetchRuns(from: startDate, to: endDate) { runs in
-            
+
             print("📦 SNAPSHOT BUILD")
             print("   Runs count:", runs.count)
             print("   Total km:", runs.map(\.distanceKm).reduce(0, +))
-            
-            // 🔴 SÉCURITÉ : aucune séance
+
+            // 🔴 Sécurité : aucune séance
             guard !runs.isEmpty else {
-                
+
                 let formatter = DateFormatter()
                 formatter.calendar = Calendar(identifier: .gregorian)
                 formatter.locale = Locale(identifier: "en_US_POSIX")
                 formatter.dateFormat = "yyyy-MM-dd"
-                
+
                 let emptySnapshot = WeeklySnapshot(
                     weekLabel: "Custom period",
                     period: PeriodSnapshot(
@@ -1043,25 +1044,22 @@ extension HealthManager {
                     comparisonPrevWeek: nil,
                     longestRunKm: nil
                 )
-                
+
                 completion(emptySnapshot)
                 return
             }
-            
+
             // ======================================================
-            // 1️⃣ CALCUL DES ZONES PAR SÉANCE
+            // 1️⃣ Calcul des zones par séance
             // ======================================================
             let group = DispatchGroup()
             var enrichedRuns: [DailyRunData] = []
-            
+
             for run in runs {
                 group.enter()
-                
-                // ⚠️ IMPORTANT : il faut lier DailyRunData ↔ HKWorkout
-                // Ici on suppose que tu peux retrouver le workout depuis la date
-                // (comme dans fetchRuns, sinon il faut l’ajouter à DailyRunData)
+
                 self.computeZonesForWorkout(run.hkWorkout) { breakdown in
-                    
+
                     let enriched = DailyRunData(
                         hkWorkout: run.hkWorkout,
                         date: run.date,
@@ -1076,17 +1074,17 @@ extension HealthManager {
                         z4: breakdown?.z4 ?? 0,
                         z5: breakdown?.z5 ?? 0
                     )
-                    
+
                     enrichedRuns.append(enriched)
                     group.leave()
                 }
             }
-            
+
             // ======================================================
-            // 2️⃣ CONSTRUCTION DU SNAPSHOT FINAL
+            // 2️⃣ Construction du snapshot final
             // ======================================================
             group.notify(queue: .main) {
-                
+
                 let totals = WeeklyTotals(
                     distanceKm: enrichedRuns.map(\.distanceKm).reduce(0, +),
                     durationMin: enrichedRuns.map(\.durationMin).reduce(0, +),
@@ -1094,7 +1092,7 @@ extension HealthManager {
                     elevationM: enrichedRuns.map(\.elevationGainM).reduce(0, +),
                     avgHr: enrichedRuns.map(\.averageHeartRate).reduce(0, +) / Double(enrichedRuns.count)
                 )
-                
+
                 let dailyRuns = enrichedRuns.map {
                     DailyRunSnapshot(
                         date: ISO8601DateFormatter().string(from: $0.date),
@@ -1109,37 +1107,39 @@ extension HealthManager {
                         z5: $0.z5
                     )
                 }
-                
+
                 let formatter = DateFormatter()
                 formatter.calendar = Calendar(identifier: .gregorian)
                 formatter.locale = Locale(identifier: "en_US_POSIX")
                 formatter.dateFormat = "yyyy-MM-dd"
-                
+
                 let period = PeriodSnapshot(
                     start: formatter.string(from: startDate),
                     end: formatter.string(from: endDate)
                 )
-                
+
                 let zonesPercent = self.computeZonesPercent(from: enrichedRuns)
-                
                 let longestRun = enrichedRuns.max(by: { $0.distanceKm < $1.distanceKm })
-                
+
+                // ✅ CALCUL DE LA CHARGE ICI
+                let trainingLoad = self.computeTrainingLoad(from: enrichedRuns)
+
                 let snapshot = WeeklySnapshot(
                     weekLabel: "Custom period",
                     period: period,
                     totals: totals,
                     zonesPercent: zonesPercent,
                     dailyRuns: dailyRuns,
-                    trainingLoad: nil,
+                    trainingLoad: trainingLoad,   // ✅ CRITIQUE
                     comparisonPrevWeek: nil,
                     longestRunKm: longestRun?.distanceKm
                 )
-                
+
                 completion(snapshot)
             }
         }
     }
-    
+
     func makeYearSnapshot(
         year: Int,
         completion: @escaping (WeeklySnapshot) -> Void
@@ -1217,4 +1217,94 @@ extension HealthManager {
 
         return snapshot
     }
+}
+
+// MARK: - SNAPSHOTS LONG TERME (SIGNATURE)
+
+extension HealthManager {
+
+    /// Construit les snapshots hebdomadaires sur les N dernières semaines
+    func makeWeeklySnapshots(
+        weeks: Int = 52,
+        completion: @escaping ([WeeklySnapshot]) -> Void
+    ) {
+
+        let calendar = Calendar.current
+        let now = Date()
+
+        let group = DispatchGroup()
+        var snapshots: [WeeklySnapshot] = []
+
+        print("🧠 BUILDING \(weeks) WEEKLY SNAPSHOTS")
+
+        for offset in stride(from: -(weeks - 1), through: 0, by: 1) {
+
+            guard
+                let ref = calendar.date(byAdding: .weekOfYear, value: offset, to: now),
+                let interval = calendar.dateInterval(of: .weekOfYear, for: ref)
+            else { continue }
+
+            group.enter()
+
+            self.makeSnapshot(from: interval.start, to: interval.end) { snapshot in
+                print("📦 Week", snapshot.period.start, "→", snapshot.totals.sessions, "sessions")
+                snapshots.append(snapshot)
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            let sorted = snapshots.sorted {
+                $0.period.start < $1.period.start
+            }
+
+            print("✅ WEEKLY SNAPSHOTS READY:", sorted.count)
+            completion(sorted)
+        }
+    }
+
+    
+    func buildRunnerSignatureIfNeeded() {
+
+        // ⚠️ Évite de recalculer inutilement
+        guard runnerSignature == nil else {
+            print("🧠 Runner signature already built")
+            return
+        }
+
+        makeWeeklySnapshots(weeks: 52) { weeklySnapshots in
+
+            print("🧪 BUILD SIGNATURE — weeks:", weeklySnapshots.count)
+
+            guard let signature = RunnerSignatureBuilder.build(from: weeklySnapshots) else {
+                print("❌ FAILED TO BUILD RUNNER SIGNATURE")
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.runnerSignature = signature
+                print("✅ RUNNER SIGNATURE STORED")
+            }
+        }
+    }
+    
+    // MARK: - Training Load (snapshot-based)
+
+    func computeTrainingLoad(from runs: [DailyRunData]) -> TrainingLoad {
+
+        // 🔹 Charge simple = durée pondérée par intensité
+        // z4+z5 = intensité forte
+        let load = runs.reduce(0.0) { acc, run in
+            let intensePct = (run.z4 + run.z5) / max(run.durationMin, 1)
+            return acc + run.durationMin * (1 + 2 * intensePct)
+        }
+
+        return TrainingLoad(
+            load7d: load,
+            load28d: 0,   // ❗ PAS de sens à ce niveau
+            ratio: 0
+        )
+    }
+
+
 }

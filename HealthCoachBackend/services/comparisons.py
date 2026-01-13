@@ -36,20 +36,16 @@ def resolve_intent(message: str) -> str:
     return "FACTUAL"
 
 
-def infer_period_context_from_keys(left_key: str | None) -> str | None:
+def infer_period_context_from_keys(key):
     """
-    Retourne le contexte temporel si la période de gauche est EN COURS.
+    Détermine le contexte temporel :
+    WEEK | MONTH | YEAR | None
     """
-    if left_key == "CURRENT_WEEK":
-        return "WEEK"
-
-    if left_key == "CURRENT_MONTH":
-        return "MONTH"
-
-    if left_key == "CURRENT_YEAR":
-        return "YEAR"
-
-    if left_key.startswith("YEAR_"):
-        return None
-
+    if isinstance(key, dict):
+        if "offset" in key:
+            return "WEEK"
+        if "month_offset" in key:
+            return "MONTH"
+        if "year_offset" in key:
+            return "YEAR"
     return None

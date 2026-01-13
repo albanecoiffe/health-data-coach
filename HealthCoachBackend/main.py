@@ -3,18 +3,20 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from schemas import ChatRequest
-from agent import (
-    analyze_question,
-    comparison_response_agent,
-    factual_response,
-    summary_response,
-)
+
+from agents.comparison_agent import comparison_response_agent
+from agents.summary_agent import summary_response
+from agents.factual_agent import factual_response
+from agents.questions_agent import analyze_question
+
 from services.intent import (
     apply_backend_overrides,
     route_decision,
     compute_intensity_split,
 )
 from services.periods import snapshot_matches_iso
+
+from services.memory import store_signature
 
 app = FastAPI()
 
@@ -46,6 +48,19 @@ def chat(req: ChatRequest):
     print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
     print("🔥 snapshots =", req.snapshots)
     print("🔥 meta =", req.meta)
+
+    session_id = (req.meta or {}).get("session_id")
+    # ======================================================
+    # 🧠 SIGNATURE INGESTION
+    # ======================================================
+    if req.signature and session_id:
+        store_signature(session_id, req.signature.model_dump())
+
+    signature = req.signature
+    session_id = req.meta.get("session_id")
+    if signature:
+        print("🧠 SIGNATURE RECEIVED")
+        store_signature(session_id, signature)
 
     # ======================================================
     # 🔒 SNAPSHOT EXACT DÉJÀ FOURNI → RÉPONSE DIRECTE
