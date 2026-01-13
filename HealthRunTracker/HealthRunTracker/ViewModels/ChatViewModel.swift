@@ -35,6 +35,8 @@ class ChatViewModel: ObservableObject {
     init(healthManager: HealthManager) {
         self.healthManager = healthManager
         healthManager.buildRunnerSignatureIfNeeded()
+        
+        debugRunnerSignature()
     }
 
     func sendMessage() {
@@ -430,20 +432,156 @@ class ChatViewModel: ObservableObject {
     
     func debugRunnerSignature() {
 
-        healthManager.makeWeeklySnapshots(weeks: 52) { weeklySnapshots in
+        // 1️⃣ Construire la signature (52 semaines suffisent)
+        healthManager.makeWeeklySnapshots(weeks: 52) { signatureWeeks in
 
-            print("🧪 SNAPSHOTS COUNT:", weeklySnapshots.count)
-
-            if let signature = RunnerSignatureBuilder.build(from: weeklySnapshots) {
-
-                print("✅ RUNNER SIGNATURE")
-                dump(signature)
-
-            } else {
+            guard let signature = RunnerSignatureBuilder.build(from: signatureWeeks) else {
                 print("❌ SIGNATURE BUILD FAILED")
+                return
+            }
+
+            print("✅ RUNNER SIGNATURE READY")
+            dump(signature)
+
+            // 2️⃣ Récupérer les 104 semaines pour le dataset
+            self.healthManager.makeWeeklySnapshots(weeks: 104) { datasetWeeks in
+
+                // 3️⃣ Export CSV enrichi
+                self.exportWeeksToCSV(datasetWeeks, signature: signature)
+
+                // 4️⃣ Upload backend
+                self.uploadCSVToBackend()
             }
         }
+
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        print("📂 Documents:", docs)
     }
+
+    func exportWeeksToCSV(
+        _ weeks: [WeeklySnapshot],
+        signature: RunnerSignature
+    ) {
+
+        var csv = ""
+        csv += "week_start,week_end,"
+        csv += "distance_km,sessions,duration_min,"
+        csv += "low_intensity_pct,high_intensity_pct,"
+        csv += "variation_km,"
+        csv += "longest_run_km,"
+        csv += "weekly_load,"
+        csv += "sig_weekly_avg_km,sig_weekly_std_km,sig_trend_12w_pct,"
+        csv += "sig_z4_z5_avg_pct,sig_z4_z5_trend_12w_pct,"
+        csv += "sig_acwr_avg,sig_acwr_max,sig_load_std_trend_12w_pct\n"
+
+        // ✅ ordre chronologique indispensable
+        let sorted = weeks.sorted { $0.period.start < $1.period.start }
+
+        var prevDistance: Double? = nil
+
+        for w in sorted {
+
+            let z = w.zonesPercent ?? [:]
+
+            let low = (z["z1"] ?? 0)
+                    + (z["z2"] ?? 0)
+                    + (z["z3"] ?? 0)
+
+            let high = (z["z4"] ?? 0)
+                     + (z["z5"] ?? 0)
+
+            // ✅ variation_km
+            let variationKm: Double
+            if let prev = prevDistance {
+                variationKm = w.totals.distanceKm - prev
+            } else {
+                variationKm = 0
+            }
+            prevDistance = w.totals.distanceKm
+
+            // ✅ longest run de la semaine
+            let longestRun = w.longestRunKm ?? 0
+
+            // ✅ charge hebdomadaire (proxy simple et valide)
+            let weeklyLoad =
+                w.totals.durationMin * (1.0 + high)
+
+            let line =
+                "\(w.period.start),\(w.period.end)," +
+                "\(w.totals.distanceKm)," +
+                "\(w.totals.sessions)," +
+                "\(w.totals.durationMin)," +
+                "\(low)," +
+                "\(high)," +
+                "\(variationKm)," +
+                "\(longestRun)," +
+                "\(weeklyLoad)," +
+                "\(signature.volume.weekly_avg_km)," +
+                "\(signature.volume.weekly_std_km)," +
+                "\(signature.volume.trend_12w_pct)," +
+                "\(signature.intensity.z4_z5_avg_pct)," +
+                "\(signature.intensity.z4_z5_trend_12w_pct)," +
+                "\(signature.load.acwrAvg)," +
+                "\(signature.load.acwrMax)," +
+                "\(signature.adaptation.loadStdTrend12wPct)\n"
+
+            csv += line
+        }
+
+        let fileURL = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("weekly_snapshots_24_months.csv")
+
+        do {
+            try csv.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("✅ CSV exporté :", fileURL)
+        } catch {
+            print("❌ Erreur export CSV :", error)
+        }
+    }
+
+
+    func uploadCSVToBackend() {
+        let fileURL = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("weekly_snapshots_24_months.csv")
+
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            print("❌ CSV introuvable")
+            return
+        }
+
+        var request = URLRequest(url: URL(string: "\(baseURL)/upload-weeks-csv")!)
+        request.httpMethod = "POST"
+
+        let boundary = UUID().uuidString
+        request.setValue(
+            "multipart/form-data; boundary=\(boundary)",
+            forHTTPHeaderField: "Content-Type"
+        )
+
+        var body = Data()
+
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"weeks.csv\"\r\n"
+                .data(using: .utf8)!
+        )
+        body.append("Content-Type: text/csv\r\n\r\n".data(using: .utf8)!)
+        body.append(try! Data(contentsOf: fileURL))
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        URLSession.shared.dataTask(with: request) { _, _, error in
+            if let error = error {
+                print("❌ Upload error:", error)
+            } else {
+                print("✅ CSV envoyé au backend")
+            }
+        }.resume()
+    }
+
     
 
 

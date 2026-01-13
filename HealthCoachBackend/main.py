@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -15,10 +15,24 @@ from services.intent import (
     compute_intensity_split,
 )
 from services.periods import snapshot_matches_iso
-
+import pandas as pd
 from services.memory import store_signature
 
+
 app = FastAPI()
+
+
+@app.post("/upload-weeks-csv")
+async def upload_csv(file: UploadFile = File(...)):
+    df = pd.read_csv(file.file)
+
+    print("📊 CSV reçu")
+    print(df.head())
+
+    # sauvegarde
+    df.to_csv("weeks_received.csv", index=False)
+
+    return {"status": "ok", "rows": len(df)}
 
 
 # ======================================================
