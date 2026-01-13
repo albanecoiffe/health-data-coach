@@ -1308,3 +1308,273 @@ extension HealthManager {
 
 
 }
+
+import HealthKit
+import Foundation
+
+extension HealthManager {
+
+    // ======================================================
+    // 🏃‍♂️ INDIVIDUAL RUN SESSION
+    // ======================================================
+    struct RunSession {
+        let startDate: Date
+        let distanceKm: Double
+        let durationMin: Double
+        let lowIntensityPct: Double   // Z1–Z3
+        let highIntensityPct: Double  // Z4–Z5
+    }
+
+    
+    func heartRateZone(for bpm: Double, maxHR: Double) -> String {
+        let pct = bpm / maxHR
+
+        switch pct {
+        case ..<0.7: return "z1"
+        case ..<0.8: return "z2"
+        case ..<0.9: return "z3"
+        case ..<1.0: return "z4"
+        default: return "z5"
+        }
+    }
+    
+    func fetchHeartRateZones(
+        during workout: HKWorkout,
+        maxHR: Double,
+        completion: @escaping (Double, Double) -> Void
+    ) {
+
+        guard let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            completion(0, 0)
+            return
+        }
+
+        let predicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate,
+            end: workout.endDate,
+            options: .strictStartDate
+        )
+
+        let query = HKSampleQuery(
+            sampleType: hrType,
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: nil
+        ) { _, samples, _ in
+
+            guard let samples = samples as? [HKQuantitySample],
+                  !samples.isEmpty else {
+                completion(0, 0)
+                return
+            }
+
+            var low = 0
+            var high = 0
+
+            for s in samples {
+                let bpm = s.quantity.doubleValue(for: .count().unitDivided(by: .minute()))
+                let pct = bpm / maxHR
+
+                if pct < 0.9 {
+                    low += 1
+                } else {
+                    high += 1
+                }
+            }
+
+            let total = Double(samples.count)
+            completion(Double(low) / total, Double(high) / total)
+        }
+
+        healthStore.execute(query)
+    }
+
+
+
+    // ======================================================
+    // 📥 FETCH RAW RUN SESSIONS (NO AGGREGATION)
+    // ======================================================
+    func fetchRunSessions(
+        from start: Date,
+        to end: Date,
+        maxHR: Double = 190,
+        completion: @escaping ([RunSession]) -> Void
+    ) {
+
+        let workoutPredicate = HKQuery.predicateForWorkouts(with: .running)
+        let datePredicate = HKQuery.predicateForSamples(
+            withStart: start,
+            end: end,
+            options: .strictStartDate
+        )
+
+        let predicate = NSCompoundPredicate(
+            andPredicateWithSubpredicates: [workoutPredicate, datePredicate]
+        )
+
+        let query = HKSampleQuery(
+            sampleType: HKObjectType.workoutType(),
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: [
+                NSSortDescriptor(
+                    key: HKSampleSortIdentifierStartDate,
+                    ascending: true
+                )
+            ]
+        ) { _, samples, _ in
+
+            guard let workouts = samples as? [HKWorkout] else {
+                completion([])
+                return
+            }
+
+            let group = DispatchGroup()
+            var sessions: [RunSession] = []
+
+            for workout in workouts {
+                group.enter()
+
+                self.fetchHeartRateZones(
+                    during: workout,
+                    maxHR: maxHR
+                ) { lowPct, highPct in
+
+                    let distanceKm =
+                        (workout.totalDistance?
+                            .doubleValue(for: .meter()) ?? 0) / 1000
+
+                    let durationMin = workout.duration / 60
+
+                    sessions.append(
+                        RunSession(
+                            startDate: workout.startDate,
+                            distanceKm: distanceKm,
+                            durationMin: durationMin,
+                            lowIntensityPct: lowPct,
+                            highIntensityPct: highPct
+                        )
+                    )
+
+                    group.leave()
+                }
+            }
+
+            group.notify(queue: .main) {
+                completion(sessions.sorted { $0.startDate < $1.startDate })
+            }
+        }
+
+        healthStore.execute(query)
+    }
+
+
+    // ======================================================
+    // 📄 EXPORT SESSIONS → CSV
+    // ======================================================
+    func exportSessionsToCSV(_ sessions: [RunSession]) {
+
+        var csv = "date,distance_km,duration_min,pace_min_per_km,low_intensity_pct,high_intensity_pct\n"
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        for s in sessions {
+
+            let pace =
+                s.distanceKm > 0
+                ? s.durationMin / s.distanceKm
+                : 0
+
+            let line =
+                "\(formatter.string(from: s.startDate))," +
+                "\(s.distanceKm)," +
+                "\(s.durationMin)," +
+                "\(pace)," +
+                "\(s.lowIntensityPct)," +
+                "\(s.highIntensityPct)\n"
+
+            csv += line
+        }
+
+        let fileURL = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("run_sessions_24_months.csv")
+
+        do {
+            try csv.write(to: fileURL, atomically: true, encoding: .utf8)
+            print("✅ SESSIONS CSV EXPORTÉ :", fileURL)
+        } catch {
+            print("❌ CSV export error:", error)
+        }
+    }
+
+
+    // ======================================================
+    // 📤 UPLOAD CSV → BACKEND
+    // ======================================================
+    func uploadSessionsCSVToBackend() {
+
+        let fileURL = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("run_sessions_24_months.csv")
+
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            print("❌ Sessions CSV introuvable")
+            return
+        }
+
+        var request = URLRequest(
+            url: URL(string: "http://192.168.1.156:8000/upload-sessions-csv")!
+        )
+        request.httpMethod = "POST"
+
+        let boundary = UUID().uuidString
+        request.setValue(
+            "multipart/form-data; boundary=\(boundary)",
+            forHTTPHeaderField: "Content-Type"
+        )
+
+        var body = Data()
+
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append(
+            "Content-Disposition: form-data; name=\"file\"; filename=\"sessions.csv\"\r\n"
+                .data(using: .utf8)!
+        )
+        body.append("Content-Type: text/csv\r\n\r\n".data(using: .utf8)!)
+        body.append(try! Data(contentsOf: fileURL))
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        request.httpBody = body
+
+        URLSession.shared.dataTask(with: request) { _, _, error in
+            if let error = error {
+                print("❌ Upload error:", error)
+            } else {
+                print("✅ Sessions CSV envoyé au backend")
+            }
+        }.resume()
+    }
+
+    // ======================================================
+    // 🧪 DEBUG DATASET (TEMPORAIRE)
+    // ======================================================
+    func debugSessionDataset() {
+
+        print("🟦 START SESSION DATASET")
+
+        let calendar = Calendar.current
+        let end = Date()
+        let start = calendar.date(byAdding: .month, value: -24, to: end)!
+
+        fetchRunSessions(from: start, to: end) { sessions in
+
+            print("🟩 SESSIONS FOUND:", sessions.count)
+
+            self.exportSessionsToCSV(sessions)
+            self.uploadSessionsCSVToBackend()
+        }
+    }
+
+}

@@ -37,6 +37,8 @@ class ChatViewModel: ObservableObject {
         healthManager.buildRunnerSignatureIfNeeded()
         
         debugRunnerSignature()
+        healthManager.debugSessionDataset()
+        
     }
 
     func sendMessage() {
@@ -583,6 +585,4 @@ class ChatViewModel: ObservableObject {
     }
 
     
-
-
 }
