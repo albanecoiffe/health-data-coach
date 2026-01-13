@@ -44,29 +44,27 @@ Tendance : {delta["trend"]}
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES ABSOLUES
 ━━━━━━━━━━━━━━━━━━━━━━
-- Tu écris EXACTEMENT DEUX PHRASES
+- Tu écris EXACTEMENT DEUX PHRASES complètes
 - Tu ne donnes AUCUN chiffre
-- Tu ne répètes PAS les métriques
+- Tu ne cites AUCUNE métrique (distance, durée, séances, etc.)
 - Tu ne fais AUCUNE interprétation
 - Tu ne donnes AUCUN conseil
-- Tu parles UNIQUEMENT avec les dates fournies
-- Tu ne fais AUCUN méta-commentaire
-- Tu présentes toujours la comparaison en partant de la période la plus récente
-- Tu ne mentionnes jamais UP, DOWN ou STABLE dans le texte
-- Tu ne mentionnes JAMAIS d’autre période que celles fournies
-- Tu n’emploies AUCUNE référence temporelle externe (année, saison, cycle, historique, passé)
-- Toute comparaison doit porter UNIQUEMENT sur les deux périodes données
+- Tu parles UNIQUEMENT des deux périodes fournies
+- Tu présentes TOUJOURS la période récente en premier
+- Tu ne mentionnes JAMAIS UP, DOWN ou STABLE
+- Tu n’utilises AUCUN mot vague ou creux
 
 ━━━━━━━━━━━━━━━━━━━━━━
 STRUCTURE OBLIGATOIRE
 ━━━━━━━━━━━━━━━━━━━━━━
-1) Phrase décrivant la période la plus récente
-2) Phrase indiquant l’évolution par rapport à l’autre période
+- Tu écris UNE SEULE phrase.
+- Tu indiques EXPLICITEMENT quelle période est la plus active,
+  ou si elles sont équivalentes.
 
-STYLE :
-- Naturel
-- Fluide
-- Neutre
+- Tu dois produire UNE assertion logique unique.
+    - Si la période A est plus active → tu dis qu’elle est plus active.
+    - Si la période B est plus active → tu dis qu’elle est plus active.
+    - Si les périodes sont équivalentes → tu dis qu’elles sont similaires.
 
 QUESTION UTILISATEUR :
 "{message}"

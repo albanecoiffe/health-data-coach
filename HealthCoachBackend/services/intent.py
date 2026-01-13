@@ -15,7 +15,6 @@ from schemas import ChatRequest
 from services.periods import (
     period_to_dates,
     extract_year,
-    snapshot_matches_period,
     resolve_period_from_decision,
 )
 from services.comparisons import infer_period_context_from_keys
@@ -46,13 +45,44 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     has_last = re.search(r"\b(dernier|derniere|precedent|precedente)\b", msg)
 
     # ======================================================
-    # 🔧 CORRECTION MÉTRIQUE ROBUSTE (typos fréquentes)
+    # 🔥 COMPARAISON EXPLICITE — PRIORITÉ ABSOLUE
+    # ======================================================
+    if re.search(r"\b(plus|moins|autant|compare|compar[eé]|par rapport)\b", msg):
+        # --- semaines ---
+        if re.search(r"cette semaine", msg) and re.search(r"semaine derniere", msg):
+            return {
+                "type": "COMPARE_PERIODS",
+                "metric": metric,
+                "left": {"offset": 0},
+                "right": {"offset": -1},
+            }
+
+        match_weeks = re.findall(r"il y a (\d+) semaines?", msg)
+        if len(match_weeks) == 2:
+            return {
+                "type": "COMPARE_PERIODS",
+                "metric": metric,
+                "left": {"offset": -int(match_weeks[0])},
+                "right": {"offset": -int(match_weeks[1])},
+            }
+
+        # --- mois ---
+        if re.search(r"ce mois", msg) and re.search(r"mois dernier", msg):
+            return {
+                "type": "COMPARE_PERIODS",
+                "metric": metric,
+                "left": {"month_offset": 0},
+                "right": {"month_offset": -1},
+            }
+
+    # ======================================================
+    # 🔧 CORRECTION MÉTRIQUE ROBUSTE
     # ======================================================
     if re.search(r"\b(temp|temps|duree)\b", msg):
         decision = {**decision, "metric": "DURATION"}
 
     # ======================================================
-    # 🔴 1️⃣ BILAN + ANNÉE EXPLICITE (PRIORITÉ ABSOLUE)
+    # 🔴 1️⃣ BILAN + ANNÉE EXPLICITE
     # ======================================================
     year = extract_year(msg)
     if is_summary and year is not None:
@@ -80,7 +110,7 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     if is_summary and re.search(r"\b(mois)\b", msg):
         return {
             "type": "REQUEST_MONTH_RELATIVE",
-            "offset": -1 if has_last else 0,
+            "month_offset": -1 if has_last else 0,
             "metric": metric,
             "reply_mode": "SUMMARY",
         }
@@ -91,13 +121,13 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     if is_summary and re.search(r"\b(annee|année|an)\b", msg):
         return {
             "type": "REQUEST_YEAR_RELATIVE",
-            "offset": -1 if has_last else 0,
+            "year_offset": -1 if has_last else 0,
             "metric": metric,
             "reply_mode": "SUMMARY",
         }
 
     # ======================================================
-    # 🔒 5️⃣ DÉCISION TEMPORELLE LLM → intouchable
+    # 🔒 5️⃣ DÉCISION LLM — ACCEPTÉE SI COHÉRENTE
     # ======================================================
     if decision.get("type") in {
         "REQUEST_WEEK",
@@ -115,10 +145,7 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     if re.search(r"\b(cette semaine|semaine en cours)\b", msg):
         return {"type": "REQUEST_WEEK", "offset": 0, "metric": metric}
 
-    if re.search(
-        r"\b(semaine derniere|semaine dernière|semaine precedente|semaine précédente|semaine d'avant)\b",
-        msg,
-    ):
+    if re.search(r"\b(semaine derniere|semaine précédente|semaine d'avant)\b", msg):
         return {"type": "REQUEST_WEEK", "offset": -1, "metric": metric}
 
     match = re.search(r"il y a (\d+) semaines?", msg)
@@ -133,21 +160,21 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     # 🔴 7️⃣ MOIS RELATIFS (hors bilan)
     # ======================================================
     if re.search(r"\b(ce mois|ce mois-ci|mois en cours)\b", msg):
-        return {"type": "REQUEST_MONTH_RELATIVE", "offset": 0, "metric": metric}
+        return {"type": "REQUEST_MONTH_RELATIVE", "month_offset": 0, "metric": metric}
 
-    if re.search(r"\b(mois dernier|mois precedent|mois précédente)\b", msg):
-        return {"type": "REQUEST_MONTH_RELATIVE", "offset": -1, "metric": metric}
+    if re.search(r"\b(mois dernier|mois précédent)\b", msg):
+        return {"type": "REQUEST_MONTH_RELATIVE", "month_offset": -1, "metric": metric}
 
     match = re.search(r"il y a (\d+) mois", msg)
     if match:
         return {
             "type": "REQUEST_MONTH_RELATIVE",
-            "offset": -int(match.group(1)),
+            "month_offset": -int(match.group(1)),
             "metric": metric,
         }
 
     # ======================================================
-    # 🔴 8️⃣ MOIS NOMMÉ (novembre, mars…)
+    # 🔴 8️⃣ MOIS NOMMÉ
     # ======================================================
     for month_name, month_num in MONTHS.items():
         if re.search(rf"\b{month_name}\b", msg):
@@ -162,12 +189,10 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     # 🔴 9️⃣ ANNÉES (hors bilan)
     # ======================================================
     if re.search(r"\b(cette année|année en cours|cet an)\b", msg):
-        return {"type": "REQUEST_YEAR_RELATIVE", "offset": 0, "metric": metric}
+        return {"type": "REQUEST_YEAR_RELATIVE", "year_offset": 0, "metric": metric}
 
-    if re.search(
-        r"\b(année dernière|annee derniere|an dernier|année précédente)\b", msg
-    ):
-        return {"type": "REQUEST_YEAR_RELATIVE", "offset": -1, "metric": metric}
+    if re.search(r"\b(année dernière|annee derniere|an dernier)\b", msg):
+        return {"type": "REQUEST_YEAR_RELATIVE", "year_offset": -1, "metric": metric}
 
     if year is not None:
         return {"type": "REQUEST_YEAR", "year": year, "metric": metric}
@@ -176,18 +201,18 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     if match:
         return {
             "type": "REQUEST_YEAR_RELATIVE",
-            "offset": -int(match.group(1)),
+            "year_offset": -int(match.group(1)),
             "metric": metric,
         }
 
     # ======================================================
-    # 🔵 🔟 BILAN SANS PÉRIODE → période courante
+    # 🔵 🔟 BILAN SANS PÉRIODE
     # ======================================================
     if is_summary:
         return {"type": "SUMMARY"}
 
     # ======================================================
-    # ⚪ FALLBACK → décision LLM
+    # ⚪ FALLBACK
     # ======================================================
     return decision
 
@@ -273,14 +298,6 @@ def route_decision(req: ChatRequest, decision: dict):
     }
 
 
-def resolve_week(offset: int):
-    today = date.today()
-    week_start = today - timedelta(days=today.weekday())
-    start = week_start + timedelta(days=7 * offset)
-    end = start + timedelta(days=7)
-    return start, end
-
-
 def build_compare_request(decision: dict, metric: str):
     """
     Construit une requête REQUEST_SNAPSHOT_BATCH
@@ -341,9 +358,6 @@ def compute_intensity_split(snapshot):
         "low_pct": round(low * 100, 1),
         "high_pct": round(high * 100, 1),
     }
-
-
-import re
 
 
 def has_word(msg: str, words: list[str]) -> bool:

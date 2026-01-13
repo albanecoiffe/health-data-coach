@@ -41,16 +41,11 @@ def infer_period_context_from_keys(key):
     Détermine le contexte temporel :
     WEEK | MONTH | YEAR | None
     """
-
-    if isinstance(key, dict) and "offset" in key:
-        return "WEEK"
-
-    if isinstance(key, str):
-        if key.startswith("YEAR_") or key in {"CURRENT_YEAR", "PREVIOUS_YEAR"}:
-            return "YEAR"
-        if key.startswith("MONTH_") or key in {"CURRENT_MONTH", "PREVIOUS_MONTH"}:
-            return "MONTH"
-        if key.endswith("_WEEK"):
+    if isinstance(key, dict):
+        if "offset" in key:
             return "WEEK"
-
+        if "month_offset" in key:
+            return "MONTH"
+        if "year_offset" in key:
+            return "YEAR"
     return None
