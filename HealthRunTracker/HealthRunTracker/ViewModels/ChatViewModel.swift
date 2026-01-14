@@ -30,15 +30,29 @@ class ChatViewModel: ObservableObject {
     private let sessionId = UUID().uuidString
     @Published var messages: [ChatMessage] = []
     @Published var currentInput: String = ""
+    
     private let healthManager: HealthManager
+
+    // ✅ AJOUTE ÇA
+    private var hasAppeared = false
 
     init(healthManager: HealthManager) {
         self.healthManager = healthManager
+    }
+
+    // ✅ AJOUTE ÇA
+    func onAppear() {
+        guard !hasAppeared else {
+            print("⚠️ ChatViewModel.onAppear ignoré (déjà appelé)")
+            return
+        }
+
+        hasAppeared = true
+        print("🚀 ChatViewModel.onAppear EXECUTÉ")
+
         healthManager.buildRunnerSignatureIfNeeded()
-        
         debugRunnerSignature()
         healthManager.debugSessionDataset()
-        
     }
 
     func sendMessage() {

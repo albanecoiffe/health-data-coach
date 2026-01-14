@@ -23,15 +23,19 @@ struct WeeklyDistanceData: Identifiable, Equatable {
 }
 
 struct HRZones {
-    static let z1 = 138.0
-    static let z2 = 151.0
-    static let z3 = 164.0
-    static let z4 = 178.0
+
+    // Seuils alignés Apple Health (observés)
+    static let z1Upper = 139.0   // <139
+    static let z2Upper = 152.0   // 140–152
+    static let z3Upper = 165.0   // 153–165
+    static let z4Upper = 178.0   // 166–178
+    // Z5 >= 179
 }
+
 
 struct SessionZoneBreakdown: Identifiable {
     let id = UUID()
-    let dayLabel: String
+    let workoutStart: Date
     let z1: Double
     let z2: Double
     let z3: Double
@@ -165,7 +169,10 @@ final class HealthManager: ObservableObject {
             // 2️⃣ Une fois TOUTES les zones calculées → construire weeklyData
             group.notify(queue: .main) {
 
-                self.weeklyZoneBreakdown = results.sorted { $0.dayLabel < $1.dayLabel }
+                self.weeklyZoneBreakdown = results.sorted {
+                    $0.workoutStart < $1.workoutStart
+                }
+
 
                 let formatter = DateFormatter()
                 formatter.locale = Locale(identifier: "fr_FR")
@@ -180,7 +187,9 @@ final class HealthManager: ObservableObject {
                     let label = formatter.string(from: workout.startDate)
 
                     // Associer au bon breakdown
-                    let zones = results.first { $0.dayLabel == label }
+                    let zones = results.first {
+                        abs($0.workoutStart.timeIntervalSince(workout.startDate)) < 1
+                    }
 
                     return DailyRunData(
                         hkWorkout: workout,
@@ -381,16 +390,24 @@ final class HealthManager: ObservableObject {
                 let s1 = hrSamples[i]
                 let s2 = hrSamples[i + 1]
 
-                let hr = s1.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                let hr1 = s1.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                let hr2 = s2.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                let hr = (hr1 + hr2) / 2.0
                 let dt = s2.startDate.timeIntervalSince(s1.startDate) / 60.0  // minutes
 
                 switch hr {
-                case ..<HRZones.z1: z1 += dt
-                case HRZones.z1..<HRZones.z2: z2 += dt
-                case HRZones.z2..<HRZones.z3: z3 += dt
-                case HRZones.z3..<HRZones.z4: z4 += dt
-                default: z5 += dt
+                case ..<HRZones.z1Upper:
+                    z1 += dt
+                case HRZones.z1Upper..<HRZones.z2Upper:
+                    z2 += dt
+                case HRZones.z2Upper..<HRZones.z3Upper:
+                    z3 += dt
+                case HRZones.z3Upper..<HRZones.z4Upper:
+                    z4 += dt
+                default:
+                    z5 += dt
                 }
+
             }
 
             let formatter = DateFormatter()
@@ -401,7 +418,7 @@ final class HealthManager: ObservableObject {
 
             completion(
                 SessionZoneBreakdown(
-                    dayLabel: label,
+                    workoutStart: workout.startDate,
                     z1: z1,
                     z2: z2,
                     z3: z3,
@@ -777,51 +794,6 @@ extension HealthManager {
     }
 }
 
-extension HealthManager {
-    func computeWeeklyHRZones(workouts: [HKWorkout]) {
-        var z1 = 0.0
-        var z2 = 0.0
-        var z3 = 0.0
-        var z4 = 0.0
-        var z5 = 0.0
-        var total = 0.0
-
-        for workout in workouts {
-            let avgHR = workout.statistics(for: HKQuantityType.quantityType(forIdentifier: .heartRate)!)?
-                .averageQuantity()?
-                .doubleValue(for: HKUnit(from: "count/min")) ?? 0
-
-            let duration = workout.duration / 60
-            total += duration
-
-            switch avgHR {
-            case ..<HRZones.z1: z1 += duration
-            case HRZones.z1..<HRZones.z2: z2 += duration
-            case HRZones.z2..<HRZones.z3: z3 += duration
-            case HRZones.z3..<HRZones.z4: z4 += duration
-            default: z5 += duration
-            }
-        }
-
-        DispatchQueue.main.async {
-            guard total > 0 else { return }
-            self.weeklyHRZones = [
-                "Z1": z1 / total,
-                "Z2": z2 / total,
-                "Z3": z3 / total,
-                "Z4": z4 / total,
-                "Z5": z5 / total
-            ]
-            self.weeklyZoneArray = [
-                HeartRateZoneData(label: "Z1", percentage: z1 / total, color: .green),
-                HeartRateZoneData(label: "Z2", percentage: z2 / total, color: .blue),
-                HeartRateZoneData(label: "Z3", percentage: z3 / total, color: .orange),
-                HeartRateZoneData(label: "Z4", percentage: z4 / total, color: .red),
-                HeartRateZoneData(label: "Z5", percentage: z5 / total, color: .purple)
-            ]
-        }
-    }
-}
 
 //
 //stats pour le coach
@@ -1090,7 +1062,8 @@ extension HealthManager {
                     durationMin: enrichedRuns.map(\.durationMin).reduce(0, +),
                     sessions: enrichedRuns.count,
                     elevationM: enrichedRuns.map(\.elevationGainM).reduce(0, +),
-                    avgHr: enrichedRuns.map(\.averageHeartRate).reduce(0, +) / Double(enrichedRuns.count)
+                    avgHr: enrichedRuns.map(\.averageHeartRate).reduce(0, +)
+                        / Double(enrichedRuns.count)
                 )
 
                 let dailyRuns = enrichedRuns.map {
@@ -1118,10 +1091,11 @@ extension HealthManager {
                     end: formatter.string(from: endDate)
                 )
 
+                // ✅ CALCUL CORRECT DES ZONES ICI
                 let zonesPercent = self.computeZonesPercent(from: enrichedRuns)
+
                 let longestRun = enrichedRuns.max(by: { $0.distanceKm < $1.distanceKm })
 
-                // ✅ CALCUL DE LA CHARGE ICI
                 let trainingLoad = self.computeTrainingLoad(from: enrichedRuns)
 
                 let snapshot = WeeklySnapshot(
@@ -1130,7 +1104,7 @@ extension HealthManager {
                     totals: totals,
                     zonesPercent: zonesPercent,
                     dailyRuns: dailyRuns,
-                    trainingLoad: trainingLoad,   // ✅ CRITIQUE
+                    trainingLoad: trainingLoad,
                     comparisonPrevWeek: nil,
                     longestRunKm: longestRun?.distanceKm
                 )
@@ -1312,20 +1286,30 @@ extension HealthManager {
 import HealthKit
 import Foundation
 
+import HealthKit
+import Foundation
+
 extension HealthManager {
 
     // ======================================================
-    // 🏃‍♂️ INDIVIDUAL RUN SESSION
+    // 🏃‍♂️ RUN SESSION (RAW, PAR SÉANCE)
     // ======================================================
     struct RunSession {
         let startDate: Date
         let distanceKm: Double
         let durationMin: Double
-        let lowIntensityPct: Double   // Z1–Z3
-        let highIntensityPct: Double  // Z4–Z5
+
+        // Temps en minutes par zone
+        let z1: Double
+        let z2: Double
+        let z3: Double
+        let z4: Double
+        let z5: Double
     }
 
-    
+    // ======================================================
+    // 🫀 ZONE CARDIAQUE POUR UN BPM
+    // ======================================================
     func heartRateZone(for bpm: Double, maxHR: Double) -> String {
         let pct = bpm / maxHR
 
@@ -1334,18 +1318,22 @@ extension HealthManager {
         case ..<0.8: return "z2"
         case ..<0.9: return "z3"
         case ..<1.0: return "z4"
-        default: return "z5"
+        default:     return "z5"
         }
     }
+
+    // ======================================================
+    // 🫀 CALCUL DES MINUTES PAR ZONE (CORE FIX)
+    // ======================================================
     
     func fetchHeartRateZones(
         during workout: HKWorkout,
         maxHR: Double,
-        completion: @escaping (Double, Double) -> Void
+        completion: @escaping (Double, Double, Double, Double, Double) -> Void
     ) {
 
         guard let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
-            completion(0, 0)
+            completion(0, 0, 0, 0, 0)
             return
         }
 
@@ -1359,40 +1347,48 @@ extension HealthManager {
             sampleType: hrType,
             predicate: predicate,
             limit: HKObjectQueryNoLimit,
-            sortDescriptors: nil
+            sortDescriptors: [
+                NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            ]
         ) { _, samples, _ in
 
             guard let samples = samples as? [HKQuantitySample],
-                  !samples.isEmpty else {
-                completion(0, 0)
+                  samples.count > 1 else {
+                completion(0, 0, 0, 0, 0)
                 return
             }
 
-            var low = 0
-            var high = 0
+            var z1 = 0.0, z2 = 0.0, z3 = 0.0, z4 = 0.0, z5 = 0.0
 
-            for s in samples {
-                let bpm = s.quantity.doubleValue(for: .count().unitDivided(by: .minute()))
-                let pct = bpm / maxHR
+            for i in 0..<(samples.count - 1) {
+                let s1 = samples[i]
+                let s2 = samples[i + 1]
 
-                if pct < 0.9 {
-                    low += 1
-                } else {
-                    high += 1
+                let hr1 = s1.quantity.doubleValue(for: .count().unitDivided(by: .minute()))
+                let hr2 = s2.quantity.doubleValue(for: .count().unitDivided(by: .minute()))
+                let hr = (hr1 + hr2) / 2.0   // 🔑 CLÉ ABSOLUE
+
+                let dt = s2.startDate.timeIntervalSince(s1.startDate) / 60.0
+                if dt <= 0 { continue }
+
+                switch hr {
+                case ..<HRZones.z1Upper: z1 += dt
+                case HRZones.z1Upper..<HRZones.z2Upper: z2 += dt
+                case HRZones.z2Upper..<HRZones.z3Upper: z3 += dt
+                case HRZones.z3Upper..<HRZones.z4Upper: z4 += dt
+                default: z5 += dt
                 }
             }
 
-            let total = Double(samples.count)
-            completion(Double(low) / total, Double(high) / total)
+            completion(z1, z2, z3, z4, z5)
         }
 
         healthStore.execute(query)
     }
 
 
-
     // ======================================================
-    // 📥 FETCH RAW RUN SESSIONS (NO AGGREGATION)
+    // 📥 FETCH DES SÉANCES BRUTES
     // ======================================================
     func fetchRunSessions(
         from start: Date,
@@ -1438,7 +1434,7 @@ extension HealthManager {
                 self.fetchHeartRateZones(
                     during: workout,
                     maxHR: maxHR
-                ) { lowPct, highPct in
+                ) { z1, z2, z3, z4, z5 in
 
                     let distanceKm =
                         (workout.totalDistance?
@@ -1451,8 +1447,11 @@ extension HealthManager {
                             startDate: workout.startDate,
                             distanceKm: distanceKm,
                             durationMin: durationMin,
-                            lowIntensityPct: lowPct,
-                            highIntensityPct: highPct
+                            z1: z1,
+                            z2: z2,
+                            z3: z3,
+                            z4: z4,
+                            z5: z5
                         )
                     )
 
@@ -1461,40 +1460,53 @@ extension HealthManager {
             }
 
             group.notify(queue: .main) {
-                completion(sessions.sorted { $0.startDate < $1.startDate })
+                completion(
+                    sessions.sorted { $0.startDate < $1.startDate }
+                )
             }
         }
 
         healthStore.execute(query)
     }
 
-
     // ======================================================
-    // 📄 EXPORT SESSIONS → CSV
+    // 📄 EXPORT CSV (AVEC % CALCULÉS APRÈS)
     // ======================================================
     func exportSessionsToCSV(_ sessions: [RunSession]) {
 
-        var csv = "date,distance_km,duration_min,pace_min_per_km,low_intensity_pct,high_intensity_pct\n"
+        var csv =
+        "date,distance_km,duration_min,pace_min_per_km," +
+        "z1_min,z2_min,z3_min,z4_min,z5_min," +
+        "low_intensity_pct,high_intensity_pct\n"
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
 
         for s in sessions {
 
-            let pace =
-                s.distanceKm > 0
+            let total = s.z1 + s.z2 + s.z3 + s.z4 + s.z5
+
+            let lowPct = total > 0
+                ? (s.z1 + s.z2 + s.z3) / total
+                : 0
+
+            let highPct = total > 0
+                ? (s.z4 + s.z5) / total
+                : 0
+
+            let pace = s.distanceKm > 0
                 ? s.durationMin / s.distanceKm
                 : 0
 
             let line =
-                "\(formatter.string(from: s.startDate))," +
-                "\(s.distanceKm)," +
-                "\(s.durationMin)," +
-                "\(pace)," +
-                "\(s.lowIntensityPct)," +
-                "\(s.highIntensityPct)\n"
+            "\(formatter.string(from: s.startDate))," +
+            "\(s.distanceKm)," +
+            "\(s.durationMin)," +
+            "\(pace)," +
+            "\(s.z1),\(s.z2),\(s.z3),\(s.z4),\(s.z5)," +
+            "\(lowPct),\(highPct)\n"
 
-            csv += line
+            csv.append(line)
         }
 
         let fileURL = FileManager.default
@@ -1508,10 +1520,9 @@ extension HealthManager {
             print("❌ CSV export error:", error)
         }
     }
-
-
+    
     // ======================================================
-    // 📤 UPLOAD CSV → BACKEND
+    // 📤 UPLOAD SESSIONS CSV → BACKEND
     // ======================================================
     func uploadSessionsCSVToBackend() {
 
@@ -1524,9 +1535,12 @@ extension HealthManager {
             return
         }
 
-        var request = URLRequest(
-            url: URL(string: "http://192.168.1.156:8000/upload-sessions-csv")!
-        )
+        guard let url = URL(string: "http://192.168.1.156:8000/upload-sessions-csv") else {
+            print("❌ URL backend invalide")
+            return
+        }
+
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
 
         let boundary = UUID().uuidString
@@ -1539,42 +1553,40 @@ extension HealthManager {
 
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append(
-            "Content-Disposition: form-data; name=\"file\"; filename=\"sessions.csv\"\r\n"
+            "Content-Disposition: form-data; name=\"file\"; filename=\"run_sessions_24_months.csv\"\r\n"
                 .data(using: .utf8)!
         )
         body.append("Content-Type: text/csv\r\n\r\n".data(using: .utf8)!)
-        body.append(try! Data(contentsOf: fileURL))
+        body.append((try? Data(contentsOf: fileURL)) ?? Data())
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
 
         request.httpBody = body
 
-        URLSession.shared.dataTask(with: request) { _, _, error in
+        URLSession.shared.dataTask(with: request) { _, response, error in
             if let error = error {
-                print("❌ Upload error:", error)
-            } else {
-                print("✅ Sessions CSV envoyé au backend")
+                print("❌ Upload sessions CSV error:", error)
+                return
+            }
+
+            if let http = response as? HTTPURLResponse {
+                print("✅ Sessions CSV upload status:", http.statusCode)
             }
         }.resume()
     }
 
     // ======================================================
-    // 🧪 DEBUG DATASET (TEMPORAIRE)
+    // 🧪 DEBUG GLOBAL
     // ======================================================
     func debugSessionDataset() {
-
-        print("🟦 START SESSION DATASET")
 
         let calendar = Calendar.current
         let end = Date()
         let start = calendar.date(byAdding: .month, value: -24, to: end)!
 
         fetchRunSessions(from: start, to: end) { sessions in
-
             print("🟩 SESSIONS FOUND:", sessions.count)
-
             self.exportSessionsToCSV(sessions)
             self.uploadSessionsCSVToBackend()
         }
     }
-
 }
