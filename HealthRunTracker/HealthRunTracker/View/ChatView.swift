@@ -77,9 +77,9 @@ struct ChatView: View {
             .background(Color.black.opacity(0.8))
         }
         .background(Color.black.ignoresSafeArea())
-        //.onAppear {
-        //print("🔥 ChatView onAppear")
-        //vm.onAppear()
-        //}
+        .onAppear {
+            print("🔥 ChatView onAppear")
+            vm.onAppear()
+        }
     }
 }

@@ -48,7 +48,7 @@ class ChatViewModel: ObservableObject {
         hasAppeared = true
         print("🚀 ChatViewModel.onAppear EXECUTÉ")
 
-        //healthManager.buildRunnerSignatureIfNeeded()
+        healthManager.buildRunnerSignatureIfNeeded()
         //debugRunnerSignature()
         //healthManager.debugSessionDataset()
     }
