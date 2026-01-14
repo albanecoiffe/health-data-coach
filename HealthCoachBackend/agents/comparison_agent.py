@@ -44,7 +44,6 @@ Tendance : {delta["trend"]}
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES ABSOLUES
 ━━━━━━━━━━━━━━━━━━━━━━
-- Tu écris EXACTEMENT DEUX PHRASES complètes
 - Tu ne donnes AUCUN chiffre
 - Tu ne cites AUCUNE métrique (distance, durée, séances, etc.)
 - Tu ne fais AUCUNE interprétation

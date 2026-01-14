@@ -23,7 +23,7 @@ struct PeriodPayload: Codable {
     let start: String
     let end: String
 }
-let baseURL = "http://192.168.1.156:8000"
+let baseURL = "http://10.3.219.135:8000"
 
 
 class ChatViewModel: ObservableObject {
@@ -33,14 +33,12 @@ class ChatViewModel: ObservableObject {
     
     private let healthManager: HealthManager
 
-    // ✅ AJOUTE ÇA
     private var hasAppeared = false
 
     init(healthManager: HealthManager) {
         self.healthManager = healthManager
     }
 
-    // ✅ AJOUTE ÇA
     func onAppear() {
         guard !hasAppeared else {
             print("⚠️ ChatViewModel.onAppear ignoré (déjà appelé)")
@@ -50,9 +48,9 @@ class ChatViewModel: ObservableObject {
         hasAppeared = true
         print("🚀 ChatViewModel.onAppear EXECUTÉ")
 
-        healthManager.buildRunnerSignatureIfNeeded()
-        debugRunnerSignature()
-        healthManager.debugSessionDataset()
+        //healthManager.buildRunnerSignatureIfNeeded()
+        //debugRunnerSignature()
+        //healthManager.debugSessionDataset()
     }
 
     func sendMessage() {
