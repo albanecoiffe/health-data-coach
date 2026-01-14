@@ -261,16 +261,56 @@ struct SessionCard: View {
                 session.averageHeartRate > 0 ? "\(Int(session.averageHeartRate)) bpm" : "—",
                 .red)
     }
+    
+    private var totalZoneTime: Double {
+        session.z1 + session.z2 + session.z3 + session.z4 + session.z5
+    }
+
+    private var lowIntensityPercent: Double {
+        guard totalZoneTime > 0 else { return 0 }
+        return (session.z1 + session.z2 + session.z3) / totalZoneTime * 100
+    }
+
+    private var highIntensityPercent: Double {
+        guard totalZoneTime > 0 else { return 0 }
+        return (session.z4 + session.z5) / totalZoneTime * 100
+    }
 
     private var zones: some View {
-        VStack(spacing: 4) {
-            zoneRow("Z1", session.z1, .green)
-            zoneRow("Z2", session.z2, .blue)
-            zoneRow("Z3", session.z3, .yellow)
-            zoneRow("Z4", session.z4, .orange)
-            zoneRow("Z5", session.z5, .red)
+        VStack(spacing: 8) {
+            VStack(spacing: 4) {
+                zoneRow("Z1", session.z1, .green)
+                zoneRow("Z2", session.z2, .blue)
+                zoneRow("Z3", session.z3, .yellow)
+                zoneRow("Z4", session.z4, .orange)
+                zoneRow("Z5", session.z5, .red)
+            }
+
+            Divider().background(.white.opacity(0.1))
+
+            intensityRow("Low intensity (Z1–Z3)",
+                         lowIntensityPercent,
+                         .green)
+
+            intensityRow("High intensity (Z4–Z5)",
+                         highIntensityPercent,
+                         .red)
         }
     }
+    private func intensityRow(_ title: String,
+                              _ percent: Double,
+                              _ color: Color) -> some View {
+        HStack {
+            Text(title)
+                .foregroundColor(.white.opacity(0.8))
+            Spacer()
+            Text(String(format: "%.0f %%", percent))
+                .foregroundColor(color)
+                .font(.subheadline.bold())
+        }
+    }
+
+
 
     // -------------------------------------------------------
     // MARK: - Reusable Rows
