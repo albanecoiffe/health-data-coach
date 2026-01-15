@@ -225,7 +225,7 @@ RÈGLE CRITIQUE :
 L’unité temporelle explicite a TOUJOURS priorité
 sur toute autre règle.
 ========================================
-7 - PROFIL / HABITUDES LONG TERME (PRIORITÉ ABSOLUE)
+9 - PROFIL / HABITUDES LONG TERME (PRIORITÉ ABSOLUE)
 ========================================
 
 Si la question porte sur :
@@ -248,45 +248,6 @@ Retourne STRICTEMENT :
         "type": "ANSWER_NOW",
   "answer_mode": "COACHING"
 }}
-
-========================================
-8 - RECOMMANDATION / PLANIFICATION (NOUVEAU)
-========================================
-
-Si la question porte sur :
-- une recommandation d'entraînement
-- la planification de la semaine
-- quoi faire / quelles séances
-- l'organisation des entraînements
-- une semaine à venir (présent ou futur)
-
-Si le message contient une demande de conseil ou de recommandation
-liée à l'entraînement, SANS métrique ni période explicite, par exemple :
-
-- "Que me recommandes-tu ?"
-- "Que dois-je faire cette semaine ?"
-- "Quel entraînement me proposes-tu ?"
-- "Comment je m'entraîne ?"
-- "Que courir cette semaine ?"
-- "Que recommandes-tu aujourd’hui ?"
-
-
-ET que la question NE demande PAS :
-- une valeur factuelle (km, durée, séances passées)
-- une comparaison
-- un bilan d’une période passée
-
-ALORS retourne STRICTEMENT :
-
-{{
-        "type": "RECOMMENDATION"
-}}
-
-RÈGLES ABSOLUES :
-- NE PAS inclure metric
-- NE PAS inclure offset / month / year
-- NE PAS inclure answer_mode
-- RECOMMANDATION concerne UNIQUEMENT la planification future
 
 ========================================
 NORMALISATION DES MÉTRIQUES (OBLIGATOIRE)
@@ -327,7 +288,7 @@ MÉTRIQUES POSSIBLES
 DISTANCE | DURATION | SESSIONS | AVG_HR | PACE | ELEVATION | LOAD | UNKNOWN
 
 ========================================
-9 - COMPARAISONS (PRIORITÉ HAUTE)
+8 - COMPARAISONS (PRIORITÉ HAUTE)
 ========================================
 
 Si la question compare deux périodes
@@ -451,7 +412,7 @@ EXEMPLES DE COMPARAISONS VALIDES
 }}
 
 ========================================
-10 - BILAN / RÉSUMÉ 
+9 - BILAN / RÉSUMÉ (PRIORITÉ ABSOLUE)
 ========================================
 
 Cette règle a PRIORITÉ sur TOUTES les autres règles du prompt.
