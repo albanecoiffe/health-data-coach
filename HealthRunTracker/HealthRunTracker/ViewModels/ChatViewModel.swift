@@ -23,7 +23,7 @@ struct PeriodPayload: Codable {
     let start: String
     let end: String
 }
-let baseURL = "http://192.168.1.156:8000"
+let baseURL = "http://169.254.245.185:8000"
 
 
 class ChatViewModel: ObservableObject {
