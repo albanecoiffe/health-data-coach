@@ -59,7 +59,7 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     #  Recommandation
     # ======================================================
     if re.search(
-        r"\b(recommande|recommandes|conseil|conseilles|que me recommandes)\b",
+        r"\b(recommande|recommandes|conseil|conseilles|que me recommande|que me recommandes)\b",
         msg,
     ):
         return {"type": "RECOMMENDATION"}
