@@ -5,9 +5,8 @@ from services.coaching.rules import (
     analyze_load,
     analyze_progress,
 )
-from services.memory import get_memory
 from services.llm import call_ollama
-from services.memory import add_to_memory, get_signature
+from services.memory import add_to_memory, get_signature, get_memory
 import json
 
 

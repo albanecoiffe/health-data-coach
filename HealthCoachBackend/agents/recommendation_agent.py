@@ -5,7 +5,7 @@
 from typing import Dict, List
 from recommendation.schemas import WeekRecommendation
 from services.llm import call_ollama
-
+from services.memory import add_to_memory, get_signature, get_memory
 
 # ------------------------------------------------------------
 # LABELS & DESCRIPTIONS (fallback uniquement)
@@ -51,12 +51,20 @@ RISK_ADVICE = {
 # ------------------------------------------------------------
 
 
-def recommendation_to_text(reco: WeekRecommendation) -> str:
+def recommendation_to_text(reco: WeekRecommendation, session_id: str) -> str:
+    signature = get_signature(session_id)
+    memory = get_memory(session_id)
+    already_started = bool(memory)
+
     prompt = f"""
 Tu es un coach de course à pied expérimenté.
 
 Voici une recommandation structurée basée sur les données réelles
 des dernières semaines d'entraînement de l'athlète.
+
+RÈGLE ABSOLUE :
+- Si la conversation a déjà commencé ({already_started}),
+  tu NE DOIS PAS dire bonjour, salut ou hello.
 
 =================================
 CONTEXTE GLOBAL DE LA SEMAINE

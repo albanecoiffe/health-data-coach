@@ -23,6 +23,8 @@ QUESTION_WORDS = [
 ]
 
 RECOMMENDATION_VERBS = [
+    "recommandation",
+    "recommandations",
     "recommande",
     "recommander",
     "recommandes",
