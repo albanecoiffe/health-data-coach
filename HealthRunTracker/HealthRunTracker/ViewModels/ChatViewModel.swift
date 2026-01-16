@@ -32,7 +32,23 @@ class ChatViewModel: ObservableObject {
     @Published var currentInput: String = ""
     
     private let healthManager: HealthManager
+    // METTRE FALSE QUAND ON VEUT PAS TELECHARGER LES CSV
+    private let shouldRefreshCSVOnAppear = true
+    
+    func refreshSessionsCSVIfNeeded() {
+        print("🔄 Refresh sessions CSV")
 
+        healthManager.fetchRunSessions(
+            from: Calendar.current.date(byAdding: .month, value: -24, to: Date())!,
+            to: Date()
+        ) { sessions in
+            print("🧪 Sessions fetched:", sessions.count)
+
+            self.healthManager.exportSessionsToCSV(sessions)
+            self.healthManager.uploadSessionsCSVToBackend()
+        }
+    }
+    
     private var hasAppeared = false
 
     init(healthManager: HealthManager) {
@@ -49,8 +65,11 @@ class ChatViewModel: ObservableObject {
         print("🚀 ChatViewModel.onAppear EXECUTÉ")
 
         healthManager.buildRunnerSignatureIfNeeded()
+        // A COMMENTER QUAND IL Y A PAS BESOIN D'OBTENIR LES CSV MIS A JOUR :
         //debugRunnerSignature()
         //healthManager.debugSessionDataset()
+        debugRunnerSignature()
+        healthManager.debugSessionDataset()
     }
 
     func sendMessage() {

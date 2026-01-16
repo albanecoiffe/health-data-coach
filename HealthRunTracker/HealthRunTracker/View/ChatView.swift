@@ -27,8 +27,7 @@ struct ChatView: View {
                                         maxWidth: UIScreen.main.bounds.width * 0.75,
                                         alignment: msg.isUser ? .trailing : .leading
                                     )
-                                ///
-                                ///Ajout de la capacité de copier
+                                // Ajout de la capacité de copier
                                     .contextMenu {
                                             Button {
                                                 UIPasteboard.general.string = msg.text
@@ -36,8 +35,8 @@ struct ChatView: View {
                                                 Label("Copier", systemImage: "doc.on.doc")
                                             }
                                         }
-                                ///
-                                ///
+                                //
+                                //
 
                                 if !msg.isUser { Spacer() }
                             }
@@ -79,7 +78,10 @@ struct ChatView: View {
         .background(Color.black.ignoresSafeArea())
         .onAppear {
             print("🔥 ChatView onAppear")
+            // A COMMENTER QUAND ON NE VEUT PAS UPDATE LES CSV :
+            vm.refreshSessionsCSVIfNeeded()
             vm.onAppear()
+        
         }
     }
 }

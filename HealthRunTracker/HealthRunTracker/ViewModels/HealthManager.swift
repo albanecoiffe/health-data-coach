@@ -1396,7 +1396,7 @@ extension HealthManager {
         maxHR: Double = 190,
         completion: @escaping ([RunSession]) -> Void
     ) {
-
+        print("🚨 fetchRunSessions called")
         let workoutPredicate = HKQuery.predicateForWorkouts(with: .running)
         let datePredicate = HKQuery.predicateForSamples(
             withStart: start,
@@ -1525,6 +1525,8 @@ extension HealthManager {
     // 📤 UPLOAD SESSIONS CSV → BACKEND
     // ======================================================
     func uploadSessionsCSVToBackend() {
+        
+        print("🚀 uploadSessionsCSVToBackend CALLED")
 
         let fileURL = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -1535,7 +1537,7 @@ extension HealthManager {
             return
         }
 
-        guard let url = URL(string: "http://192.168.1.156:8000/upload-sessions-csv") else {
+        guard let url = URL(string: "\(baseURL)/upload-sessions-csv") else {
             print("❌ URL backend invalide")
             return
         }
