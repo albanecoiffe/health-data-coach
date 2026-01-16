@@ -32,10 +32,16 @@ class ChatViewModel: ObservableObject {
     @Published var currentInput: String = ""
     
     private let healthManager: HealthManager
+    
     // METTRE FALSE QUAND ON VEUT PAS TELECHARGER LES CSV
-    private let shouldRefreshCSVOnAppear = true
+    private let shouldRefreshCSVOnAppear = false
     
     func refreshSessionsCSVIfNeeded() {
+        guard shouldRefreshCSVOnAppear else {
+            print("⏭️ CSV refresh skipped")
+            return
+        }
+
         print("🔄 Refresh sessions CSV")
 
         healthManager.fetchRunSessions(
@@ -48,6 +54,7 @@ class ChatViewModel: ObservableObject {
             self.healthManager.uploadSessionsCSVToBackend()
         }
     }
+
     
     private var hasAppeared = false
 
@@ -64,13 +71,18 @@ class ChatViewModel: ObservableObject {
         hasAppeared = true
         print("🚀 ChatViewModel.onAppear EXECUTÉ")
 
+        // Toujours nécessaire
         healthManager.buildRunnerSignatureIfNeeded()
-        // A COMMENTER QUAND IL Y A PAS BESOIN D'OBTENIR LES CSV MIS A JOUR :
-        //debugRunnerSignature()
-        //healthManager.debugSessionDataset()
-        debugRunnerSignature()
-        healthManager.debugSessionDataset()
+
+        // 🔄 CSV UNIQUEMENT si activé
+        if shouldRefreshCSVOnAppear {
+            debugRunnerSignature()
+            refreshSessionsCSVIfNeeded()
+        } else {
+            print("⏭️ CSV generation disabled")
+        }
     }
+
 
     func sendMessage() {
         let text = currentInput.trimmingCharacters(in: .whitespacesAndNewlines)
