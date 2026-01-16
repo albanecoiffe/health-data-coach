@@ -125,7 +125,8 @@ LEXIQUE — CHARGE (OBLIGATOIRE)
 
 - acwr_avg :
   → rapport entre la charge récente et la charge habituelle  
-  → proche de 1 = charge globalement bien tolérée
+  → une valeur proche de 1 indique une continuité de charge  
+  → des valeurs souvent observées entre 0.8 et 1.3 traduisent une charge globalement cohérente dans le temps
 
 - acwr_max :
   → plus haut pic ponctuel de charge observé  
@@ -137,6 +138,7 @@ INTERPRÉTATION AUTORISÉE
 - Une charge stable est plus facile à absorber dans le temps
 - Des pics ponctuels peuvent exister sans remettre en cause l’équilibre global
 - L’analyse porte sur la cohérence, pas sur un jugement médical
+- Une charge bien tolérée ne signifie pas une capacité infinie d’augmentation
 
 ━━━━━━━━━━━━━━━━━━━━━━
 INTERDIT ABSOLU
@@ -164,6 +166,14 @@ RÈGLES DE RÉPONSE
 - Aucun calcul
 - Aucun plan d’entraînement
 - 3 à 5 phrases maximum
+- Tu NE DOIS JAMAIS mentionner :
+  - les noms de colonnes
+  - les noms de variables
+  - les clés JSON
+  - les termes techniques internes du système
+SI TU UTILISES UN INDICATEUR :
+- Tu DOIS le reformuler en langage humain
+- Tu DOIS expliquer ce qu’il signifie, pas comment il s’appelle
 
 QUESTION :
 {message}
@@ -193,8 +203,9 @@ LEXIQUE — RÉGULARITÉ (OBLIGATOIRE)
   → mesure la continuité dans le temps
 
 - longest_break_days :
-  → durée maximale observée sans courir  
-  → reflète l’existence ou non de ruptures longues
+  → durée maximale d’une interruption complète d’entraînement
+    (semaines consécutives sans aucune séance)
+  → indicateur de rupture prolongée, pas de récupération normale
 
 - weekly_std_sessions :
   → variation du nombre de séances par semaine  
@@ -207,6 +218,9 @@ INTERPRÉTATION AUTORISÉE
 - La stabilité reflète la répétition d’un rythme similaire
 - Une interruption ponctuelle n’annule pas une dynamique globale
 
+IMPORTANT :
+- longest_break_days = 0 ne signifie PAS absence de repos
+- Il signifie absence de rupture prolongée (plusieurs semaines sans courir)
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -214,6 +228,14 @@ RÈGLES DE RÉPONSE
 - Aucun jugement définitif
 - Aucun plan d’entraînement
 - 3 à 5 phrases maximum
+- Tu NE DOIS JAMAIS mentionner :
+  - les noms de colonnes
+  - les noms de variables
+  - les clés JSON
+  - les termes techniques internes du système
+SI TU UTILISES UN INDICATEUR :
+- Tu DOIS le reformuler en langage humain
+- Tu DOIS expliquer ce qu’il signifie, pas comment il s’appelle
 
 QUESTION :
 {message}
@@ -277,6 +299,14 @@ RÈGLES DE RÉPONSE
 - Pas de seuils médicaux
 - Pas de plan d’entraînement
 - 3 à 5 phrases maximum
+- Tu NE DOIS JAMAIS mentionner :
+  - les noms de colonnes
+  - les noms de variables
+  - les clés JSON
+  - les termes techniques internes du système
+SI TU UTILISES UN INDICATEUR :
+- Tu DOIS le reformuler en langage humain
+- Tu DOIS expliquer ce qu’il signifie, pas comment il s’appelle
 
 QUESTION :
 {message}
@@ -302,19 +332,26 @@ LEXIQUE — PROGRESSION (OBLIGATOIRE)
 ━━━━━━━━━━━━━━━━━━━━━━
 
 - trend_12w_pct :
-  → évolution récente du volume sur les 3 derniers mois
+  → évolution moyenne du volume sur les 12 dernières semaines  
+  → positive = augmentation récente, négative = diminution
 
 - acwr_avg :
-  → capacité moyenne à absorber la charge habituelle
+  → rapport entre la charge récente et la charge habituelle  
+  → une valeur proche de 1 indique une continuité de charge  
+  → des valeurs souvent observées entre 0.8 et 1.3 traduisent une charge globalement cohérente dans le temps
 
 - acwr_max :
-  → pics ponctuels de charge tolérés dans le temps
+  → plus haut pic ponctuel de charge observé  
+  → indique des semaines plus exigeantes, sans dire si elles sont dangereuses
 
 - weeks_with_runs_pct :
-  → continuité de la pratique sur la durée
+  → proportion de semaines où au moins une séance a été réalisée  
+  → mesure la continuité dans le temps
 
 - longest_break_days :
-  → existence ou non de ruptures prolongées
+  → durée maximale d’une interruption complète d’entraînement
+    (semaines consécutives sans aucune séance)
+  → indicateur de rupture prolongée, pas de récupération normale
 
 ━━━━━━━━━━━━━━━━━━━━━━
 INTERPRÉTATION AUTORISÉE
@@ -323,6 +360,20 @@ INTERPRÉTATION AUTORISÉE
 - Elle peut se traduire par une meilleure tolérance à l’effort
 - La continuité sans rupture est un signal positif
 
+HIÉRARCHIE D’INTERPRÉTATION (OBLIGATOIRE)
+- La progression s’observe lorsque le volume évolue dans le temps
+  ET que cette évolution est absorbée sans rupture.
+- L’évolution du volume (trend_12w_pct) indique le stimulus appliqué.
+- Les indicateurs de charge (acwr_avg, acwr_max) indiquent
+  si ce stimulus est toléré de manière cohérente.
+- La régularité (weeks_with_runs_pct, longest_break_days)
+  confirme la durabilité de cette adaptation.
+
+IMPORTANT :
+- longest_break_days = 0 ne signifie PAS absence de repos
+- Il signifie absence de rupture prolongée (plusieurs semaines sans courir)
+- Une bonne tolérance à la charge seule n’est PAS une progression.
+- Une hausse du volume non tolérée n’est PAS une progression durable.
 ━━━━━━━━━━━━━━━━━━━━━━
 INTERDIT ABSOLU
 ━━━━━━━━━━━━━━━━━━━━━━
