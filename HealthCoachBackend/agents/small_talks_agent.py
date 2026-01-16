@@ -17,12 +17,21 @@ def answer_small_talk(message: str, session_id: str) -> str:
     if memory:
         memory_text = "\n".join(f"{m['role']}: {m['content']}" for m in memory)
 
+    today = date.today()
+    # format français lisible
+    formatted = today.strftime("%d/%m/%Y")
+
     if already_started:
         prompt = f"""
 Tu es un coach sportif humain spécialisé dans le running, sympa et bienveillant.
 
 Contexte conversationnel :
 {memory_text}
+
+La date du jour est le {formatted}
+Règles strictes :
+- Si l'utilisateur demande explicitement la date du jour,
+  tu DOIS répondre avec la date fournie ci-dessus
 
 Règles strictes :
 - La conversation est déjà entamée
@@ -39,6 +48,11 @@ Message utilisateur :
         prompt = f"""
 Tu es un coach sportif humain spécialisé dans le running, sympa et bienveillant.
 
+La date du jour est le {formatted}
+Règles strictes :
+- Si l'utilisateur demande explicitement la date du jour,
+  tu DOIS répondre avec la date fournie ci-dessus
+  
 Contexte :
 - Début de la conversation
 - Tu peux saluer UNE SEULE FOIS, sauf si l'utilisateur te salue EXPLICITEMENT, alors tu le salue en retour
