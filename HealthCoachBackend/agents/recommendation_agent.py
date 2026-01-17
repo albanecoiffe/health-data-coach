@@ -7,44 +7,6 @@ from recommendation.schemas import WeekRecommendation
 from services.llm import call_ollama
 from services.memory import add_to_memory, get_signature, get_memory
 
-# ------------------------------------------------------------
-# LABELS & DESCRIPTIONS (fallback uniquement)
-# ------------------------------------------------------------
-
-SESSION_DESCRIPTIONS = {
-    "easy": "une séance facile, à allure confortable, sans contrainte",
-    "endurance": "une séance d’endurance plus longue, à allure modérée",
-    "intensity": "une séance intense (fractionné, tempo ou travail de vitesse)",
-}
-
-WEEK_CLUSTER_DESCRIPTIONS = {
-    0: "une semaine maîtrisée, orientée endurance",
-    1: "une semaine intensive avec une charge élevée",
-    2: "une semaine courte ou déséquilibrée (reprise ou contrainte)",
-}
-
-RISK_DESCRIPTIONS = {
-    "low": "Le risque de surcharge est faible.",
-    "moderate": "Le risque de surcharge est modéré, une certaine vigilance est recommandée.",
-    "high": "Le risque de surcharge est élevé, il est important de lever le pied.",
-}
-
-RISK_ADVICE = {
-    "low": [
-        "Tu peux maintenir ta charge actuelle sans inquiétude particulière.",
-        "Continue à écouter tes sensations, mais le contexte est favorable.",
-    ],
-    "moderate": [
-        "Essaie de bien espacer les séances intenses.",
-        "Sois attentif à la récupération (sommeil, fatigue, douleurs).",
-    ],
-    "high": [
-        "Réduis la charge ou l’intensité cette semaine.",
-        "Priorise la récupération et évite d’ajouter une séance intense.",
-        "Si la fatigue persiste, une semaine allégée peut être bénéfique.",
-    ],
-}
-
 
 # ------------------------------------------------------------
 # LLM
@@ -127,7 +89,9 @@ INTERPRÉTATION :
 - low_intensity_pct élevé → séance facile / récup
 - Utilise ces données pour expliquer leur rôle
 - Si toutes les séances prévues ont été réalisées, dis-le explicitement
-
+- Quand la semaine est complète, toute référence aux séances passées
+  doit explicitement mentionner "la semaine qui vient de s’achever"
+  ou "les dernières semaines".
 =================================
 SÉANCES À PROGRAMMER
 =================================
@@ -143,6 +107,12 @@ INTERPRÉTATION DES DONNÉES :
 - Si aucune séance n’est proposée :
   - explique que toutes les séances prévues ont été réalisées
   - enchaîne naturellement vers la semaine suivante si le contexte l’indique
+
+RÈGLE DE COHÉRENCE :
+- Si risk_level est "high", le discours doit insister sur la récupération,
+  la consolidation ou la stabilisation.
+- Ne jamais associer "risque élevé" avec "accélérer", "maintenir le rythme"
+  ou "augmenter la charge".
 
 =================================
 INSTRUCTIONS STRICTES
