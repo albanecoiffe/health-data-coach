@@ -158,6 +158,9 @@ EXEMPLE CORRECT :
 EXEMPLE INTERDIT :
 "260 km", "volume de 260 km"
 
+- Tu NE DOIS JAMAIS mentionner de noms de variables techniques
+- Tu dois reformuler chaque indicateur en langage naturel
+
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -220,6 +223,13 @@ INTERPRÉTATION AUTORISÉE
 IMPORTANT :
 - longest_break_days = 0 ne signifie PAS absence de repos
 - Il signifie absence de rupture prolongée (plusieurs semaines sans courir)
+
+━━━━━━━━━━━━━━━━━━━━━━
+RÈGLE ABSOLUE DE LANGAGE HUMAIN
+━━━━━━━━━━━━━━━━━━━━━━
+- Tu NE DOIS JAMAIS mentionner de noms de variables techniques
+- Tu dois reformuler chaque indicateur en langage naturel
+
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -379,6 +389,16 @@ INTERDIT ABSOLU
 - Ne jamais promettre une progression future
 - Ne jamais parler de performance chiffrée
 - Ne jamais médicaliser
+
+━━━━━━━━━━━━━━━━━━━━━━
+RÈGLE ABSOLUE DE LANGAGE HUMAIN
+━━━━━━━━━━━━━━━━━━━━━━
+- Tu NE DOIS JAMAIS mentionner de noms de variables techniques
+- Tu dois reformuler chaque indicateur en langage naturel
+
+EXEMPLES INTERDITS :
+- acwr_avg
+- trend_12w_pct
 
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE

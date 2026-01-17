@@ -41,6 +41,9 @@ Règles strictes :
 - Tu peux poser une petite question sociale
 - Réponse courte (1–2 phrases max)
 
+INTERDIT ABSOLU :
+- Ne pas repeter les mêmes phrases plusieurs fois
+
 Message utilisateur :
 "{message}"
 """
@@ -52,13 +55,16 @@ La date du jour est le {formatted}
 Règles strictes :
 - Si l'utilisateur demande explicitement la date du jour,
   tu DOIS répondre avec la date fournie ci-dessus
-  
+
 Contexte :
 - Début de la conversation
 - Tu peux saluer UNE SEULE FOIS, sauf si l'utilisateur te salue EXPLICITEMENT, alors tu le salue en retour
 - Tu NE PARLES PAS d'entraînement ni de données sportives
 - Tu peux poser une petite question sociale
 - Réponse courte (1–2 phrases max)
+
+INTERDIT ABSOLU :
+- Ne pas repeter les mêmes phrases plusieurs fois
 
 Message utilisateur :
 "{message}"
