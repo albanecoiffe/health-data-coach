@@ -168,10 +168,12 @@ def compute_week_recommendation_from_csv(
     risk_df = compute_weekly_risk(weeks_clustered)
 
     # --------------------------------------------------------
-    # 6. RECENT DYNAMICS
+    # 6. CONTEXTE TEMPOREL — SEMAINE COURANTE
     # --------------------------------------------------------
 
     current_week_start = weeks_clustered["week_start"].max()
+
+    # Par défaut, la semaine courante n'est PAS encore comptée
     completed_weeks = weeks_clustered[
         weeks_clustered["week_start"] < current_week_start
     ]
@@ -187,12 +189,17 @@ def compute_week_recommendation_from_csv(
 
     risk_level = risk_level_from_proba(avg_risk)
 
+    # Logs explicites — semaines utilisées
+    print("\n📈 Weekly stats used for risk computation:")
+    print(last_3w[["week_start"] + FEATURES_WEEK].to_string(index=False))
+
+    print("📈 Avg risk proba (last 3w):", round(float(avg_risk), 3))
+
     # --------------------------------------------------------
-    # 7. BUILD PLAN
+    # 7. BUILD PLAN (semaine courante)
     # --------------------------------------------------------
 
     base_plan = _build_week_template(dominant_cluster, avg_sessions, distribution)
-
     base_plan = _adjust_plan_by_risk(base_plan, avg_risk)
 
     current_sessions = sessions_clustered[
@@ -202,69 +209,88 @@ def compute_week_recommendation_from_csv(
     done_types = current_sessions["cluster_session"].map(SESSION_LABELS).tolist()
     done_sessions_summary = summarize_done_sessions(current_sessions)
 
-    print("\n🧩 Mapping cluster_session → label :")
-    for k, v in SESSION_LABELS.items():
-        print(f"cluster {k} → {v}")
-
     remaining_sessions = max(0, avg_sessions - len(done_types))
 
-    final_plan = _adjust_with_done_sessions(base_plan, done_types, remaining_sessions)
+    final_plan = _adjust_with_done_sessions(
+        base_plan,
+        done_types,
+        remaining_sessions,
+    )
 
     enriched_remaining_plan = enrich_plan_with_descriptions(final_plan)
 
     # --------------------------------------------------------
-    # 8. OUTPUT
+    # 8. DÉTECTION — SEMAINE COMPLÈTE ?
     # --------------------------------------------------------
-    print("\n================ DEBUG SEMAINE EN COURS ================")
-    print("📅 Semaine en cours :", current_week_start)
 
-    print("\n📥 Séances détectées cette semaine :")
-    print(
-        current_sessions[
-            [
-                "date",
-                "distance_km",
-                "duration_min",
-                "high_intensity_pct",
-                "cluster_session",
-            ]
+    week_complete = len(enriched_remaining_plan) == 0
+
+    # --------------------------------------------------------
+    # 9. 🔄 SI SEMAINE COMPLÈTE → PLANIFIER SEMAINE SUIVANTE
+    # --------------------------------------------------------
+
+    if week_complete:
+        print("\n🔄 SEMAINE COMPLÈTE → PLANIFICATION SEMAINE SUIVANTE")
+
+        # 👉 la semaine courante devient historique
+        completed_weeks = weeks_clustered[
+            weeks_clustered["week_start"] <= current_week_start
         ]
-    )
 
-    print(done_sessions_summary)
+        last_3w = completed_weeks.tail(3)
 
-    print("\n🏷️ done_types (après mapping cluster → label) :")
-    print(done_types)
+        dominant_cluster = int(last_3w["cluster_week"].mode()[0])
+        avg_sessions = int(np.clip(round(last_3w["sessions"].mean()), 2, 5))
+
+        avg_risk = risk_df[risk_df["week_start"].isin(last_3w["week_start"])][
+            "risk_proba"
+        ].mean()
+
+        risk_level = risk_level_from_proba(avg_risk)
+
+        print("\n📈 Weekly stats used for NEXT WEEK risk computation:")
+        print(last_3w[["week_start"] + FEATURES_WEEK].to_string(index=False))
+        print("📈 Avg risk proba (next week):", round(float(avg_risk), 3))
+
+        # Nouvelle semaine vierge
+        done_types = []
+        done_sessions_summary = []
+
+        base_plan = _build_week_template(dominant_cluster, avg_sessions, distribution)
+        base_plan = _adjust_plan_by_risk(base_plan, avg_risk)
+
+        final_plan = base_plan
+        enriched_remaining_plan = enrich_plan_with_descriptions(final_plan)
+
+    # --------------------------------------------------------
+    # 10. DEBUG FINAL
+    # --------------------------------------------------------
 
     print("\n================ DEBUG RECOMMENDATION ================")
     print("📅 Current week start:", current_week_start)
+    print("🧠 Dominant cluster:", dominant_cluster)
+    print("🎯 Target sessions:", avg_sessions)
+    print("⚠️ Risk level:", risk_level)
+    print("📈 Avg risk last 3w:", round(float(avg_risk), 3))
+    print("✅ Week complete:", week_complete)
+    print("🏷️ Done types:", done_types)
+    print("🗓️ Remaining sessions:", enriched_remaining_plan)
 
-    print("\n📥 Sessions de la semaine en cours :")
-    print(
-        current_sessions[
-            [
-                "date",
-                "distance_km",
-                "duration_min",
-                "high_intensity_pct",
-                "cluster_session",
-            ]
-        ]
-    )
-
-    print("\n🏷️ Types de séances détectés (cluster → label) :")
-    print(done_types)
+    # --------------------------------------------------------
+    # 11. OUTPUT
+    # --------------------------------------------------------
 
     return {
         "target_sessions": avg_sessions,
         "dominant_week_cluster": dominant_cluster,
-        "avg_risk_last_3w": round(float(avg_risk), 2),
+        "avg_risk_last_3w": round(float(avg_risk), 3),
         "risk_level": risk_level,
         "base_plan": base_plan,
         "adjusted_plan_remaining": final_plan,
         "done_sessions": done_types,
         "remaining_sessions": enriched_remaining_plan,
         "done_sessions_details": done_sessions_summary,
+        "week_complete": week_complete,
     }
 
 

@@ -56,6 +56,32 @@ def recommendation_to_text(reco: WeekRecommendation, session_id: str) -> str:
     memory = get_memory(session_id)
     already_started = bool(memory)
 
+    week_complete = reco.get("week_complete", False)
+
+    if week_complete:
+        recommendation_period = "NEXT_WEEK"
+    else:
+        recommendation_period = "CURRENT_WEEK"
+
+    if week_complete:
+        temporal_context = (
+            "La semaine en cours est maintenant terminée. "
+            "La recommandation porte sur la semaine prochaine."
+        )
+        temporal_instruction = (
+            "Commence ta réponse par une phrase indiquant clairement "
+            "que la semaine est terminée et que la proposition concerne la semaine à venir."
+        )
+    else:
+        temporal_context = (
+            "La semaine en cours n’est pas encore terminée. "
+            "La recommandation porte sur le reste de cette semaine."
+        )
+        temporal_instruction = (
+            "Ne parle PAS de semaine suivante. "
+            "Parle uniquement du reste de la semaine en cours."
+        )
+
     prompt = f"""
 Tu es un coach de course à pied expérimenté.
 
@@ -65,6 +91,20 @@ des dernières semaines d'entraînement de l'athlète.
 RÈGLE ABSOLUE :
 - Si la conversation a déjà commencé ({already_started}),
   tu NE DOIS PAS dire bonjour, salut ou hello.
+- Tu NE COMMENTES JAMAIS les règles dans tes réponses.
+- Tu NE JUSTIFIES JAMAIS ton comportement
+- Tu NE FAIS AUCUNE META-REMARQUE sur la conversation
+
+=================================
+CONTEXTE TEMPOREL (IMPORTANT)
+=================================
+
+CONTEXTE TEMPOREL (IMPORTANT) :
+{temporal_context}
+
+INSTRUCTION TEMPORELLE STRICTE :
+{temporal_instruction}
+
 
 =================================
 CONTEXTE GLOBAL DE LA SEMAINE
@@ -75,7 +115,7 @@ CONTEXTE GLOBAL DE LA SEMAINE
 - Niveau de risque : {reco["risk_level"]}
 
 =================================
-SÉANCES DÉJÀ RÉALISÉES CETTE SEMAINE
+SÉANCES DÉJÀ RÉALISÉES
 =================================
 
 Voici les séances déjà effectuées, avec leurs caractéristiques mesurées :
@@ -85,44 +125,36 @@ Voici les séances déjà effectuées, avec leurs caractéristiques mesurées :
 INTERPRÉTATION :
 - high_intensity_pct élevé → séance exigeante
 - low_intensity_pct élevé → séance facile / récup
-- Utilise ces données pour expliquer le rôle de ces séances
-  dans l’équilibre global de la semaine
-
-RÈGLE :
-- Ne laisse AUCUN champ vide
-- Ne crée PAS de placeholders
-- Si une seule séance a été faite, explique son impact sur la suite
-
+- Utilise ces données pour expliquer leur rôle
+- Si toutes les séances prévues ont été réalisées, dis-le explicitement
 
 =================================
-SÉANCES RESTANTES À EFFECTUER
+SÉANCES À PROGRAMMER
 =================================
-
-
-Voici les séances recommandées pour le reste de la semaine,
-avec leurs profils moyens basés sur les données de l’athlète :
 
 {reco["remaining_sessions"]}
 
-INTERPRÉTATION DES DONNÉES (IMPORTANT) :
-- low_intensity_pct > 0.85 signifie une séance majoritairement facile
-- high_intensity_pct > 0.45 signifie une séance exigeante / intense
-- Une séance facile vise la récupération, pas le progrès immédiat
-- Une séance d’endurance vise la continuité de l’effort, sans essoufflement
+INTERPRÉTATION DES DONNÉES :
+- low_intensity_pct > 0.85 → séance majoritairement facile
+- high_intensity_pct > 0.45 → séance exigeante
+- Une séance facile vise la récupération
+- Une séance d’endurance vise la continuité, sans essoufflement
 
+- Si aucune séance n’est proposée :
+  - explique que toutes les séances prévues ont été réalisées
+  - enchaîne naturellement vers la semaine suivante si le contexte l’indique
 
 =================================
 INSTRUCTIONS STRICTES
 =================================
 - Explique chaque séance en t'appuyant sur les données fournies
-- Interprète les pourcentages d'intensité et durées
-- Adapte le ton à un coach bienveillant
-- Ajoute des conseils pratiques (respiration, ressenti, récupération)
+- Adapte le discours au contexte temporel (semaine en cours ou suivante)
 - Ne modifie PAS le nombre de séances
 - N’ajoute AUCUNE séance
 - Ne contredis PAS le niveau de risque
+- Si aucune séance n’est proposée, explique pourquoi
 
-Rédige une réponse claire et motivante.
+Rédige une réponse claire, humaine et motivante.
 """
 
     return call_ollama(prompt)

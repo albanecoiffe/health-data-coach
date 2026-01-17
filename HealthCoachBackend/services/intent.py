@@ -258,7 +258,7 @@ def route_decision(req: ChatRequest, decision: dict):
     if decision.get("type") == "RECOMMENDATION":
         recommendation = compute_week_recommendation_from_csv()
 
-        text = recommendation_to_text(recommendation)
+        text = recommendation_to_text(recommendation, session_id)
 
         return {
             "type": "ANSWER_NOW",
