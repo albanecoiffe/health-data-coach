@@ -9,7 +9,7 @@ from agents.snapshot_agent import answer_with_snapshot
 from agents.small_talks_agent import answer_small_talk
 from agents.questions_agent import analyze_question
 from agents.summary_agent import summary_response
-
+from agents.recommendation_agent import recommendation_to_text
 from agents.coaching_agent import answer_coaching
 from schemas import ChatRequest
 from services.periods import (
@@ -17,6 +17,10 @@ from services.periods import (
     extract_year,
     resolve_period_from_decision,
 )
+from recommendation.engine import (
+    compute_week_recommendation_from_csv,
+)
+
 from services.comparisons import infer_period_context_from_keys
 from fastapi import HTTPException
 
@@ -52,7 +56,16 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     has_last = re.search(r"\b(dernier|derniere|precedent|precedente)\b", msg)
 
     # ======================================================
-    # 🔥 COMPARAISON EXPLICITE — PRIORITÉ ABSOLUE
+    #  Recommandation
+    # ======================================================
+    if re.search(
+        r"\b(recommande|recommandes|conseil|conseilles|que me recommande|que me recommandes|recommandations|recommandation)\b",
+        msg,
+    ):
+        return {"type": "RECOMMENDATION"}
+
+    # ======================================================
+    # 🔥 COMPARAISON EXPLICITE
     # ======================================================
     if re.search(r"\b(plus|moins|autant|compare|compar[eé]|par rapport)\b", msg):
         # --- semaines ---
@@ -239,6 +252,19 @@ def route_decision(req: ChatRequest, decision: dict):
     if decision.get("type") == "COMPARE_PERIODS":
         return build_compare_request(decision, metric)
 
+    # ======================================================
+    # 🧠 RECOMMANDATION — PLANIFICATION DE LA SEMAINE
+    # ======================================================
+    if decision.get("type") == "RECOMMENDATION":
+        recommendation = compute_week_recommendation_from_csv()
+
+        text = recommendation_to_text(recommendation, session_id)
+
+        return {
+            "type": "ANSWER_NOW",
+            "reply": text,
+            "data": recommendation,
+        }
     # ======================================================
     # 🛑 ANSWER_NOW → réponse immédiate
     # ======================================================

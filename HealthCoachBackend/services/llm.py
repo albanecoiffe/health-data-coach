@@ -13,7 +13,7 @@ def call_ollama(prompt: str) -> str:
             "stream": False,
             "options": {"temperature": 0, "top_p": 0},
         },
-        timeout=30,
+        timeout=90,
     )
     res.raise_for_status()
     return res.json()["response"]

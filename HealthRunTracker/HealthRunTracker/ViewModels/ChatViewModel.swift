@@ -23,7 +23,7 @@ struct PeriodPayload: Codable {
     let start: String
     let end: String
 }
-let baseURL = "http://10.3.219.135:8000"
+let baseURL = "http://192.168.1.156:8000"
 
 
 class ChatViewModel: ObservableObject {
@@ -32,7 +32,30 @@ class ChatViewModel: ObservableObject {
     @Published var currentInput: String = ""
     
     private let healthManager: HealthManager
+    
+    // METTRE FALSE QUAND ON VEUT PAS TELECHARGER LES CSV
+    private let shouldRefreshCSVOnAppear = true
+    
+    func refreshSessionsCSVIfNeeded() {
+        guard shouldRefreshCSVOnAppear else {
+            print("⏭️ CSV refresh skipped")
+            return
+        }
 
+        print("🔄 Refresh sessions CSV")
+
+        healthManager.fetchRunSessions(
+            from: Calendar.current.date(byAdding: .month, value: -24, to: Date())!,
+            to: Date()
+        ) { sessions in
+            print("🧪 Sessions fetched:", sessions.count)
+
+            self.healthManager.exportSessionsToCSV(sessions)
+            self.healthManager.uploadSessionsCSVToBackend()
+        }
+    }
+
+    
     private var hasAppeared = false
 
     init(healthManager: HealthManager) {
@@ -48,10 +71,18 @@ class ChatViewModel: ObservableObject {
         hasAppeared = true
         print("🚀 ChatViewModel.onAppear EXECUTÉ")
 
+        // Toujours nécessaire
         healthManager.buildRunnerSignatureIfNeeded()
-        //debugRunnerSignature()
-        //healthManager.debugSessionDataset()
+
+        // 🔄 CSV UNIQUEMENT si activé
+        if shouldRefreshCSVOnAppear {
+            debugRunnerSignature()
+            refreshSessionsCSVIfNeeded()
+        } else {
+            print("⏭️ CSV generation disabled")
+        }
     }
+
 
     func sendMessage() {
         let text = currentInput.trimmingCharacters(in: .whitespacesAndNewlines)

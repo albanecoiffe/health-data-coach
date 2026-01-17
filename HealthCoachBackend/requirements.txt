@@ -3,3 +3,4 @@ uvicorn
 requests
 spacy
 nltk
+scikit-learn

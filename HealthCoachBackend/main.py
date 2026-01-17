@@ -5,9 +5,11 @@ from fastapi.responses import JSONResponse
 from schemas import ChatRequest
 
 from agents.comparison_agent import comparison_response_agent
+from agents.small_talks_agent import answer_small_talk
 from agents.summary_agent import summary_response
 from agents.factual_agent import factual_response
 from agents.questions_agent import analyze_question
+from services.intent_gatekeeper import intent_gatekeeper
 
 from services.intent import (
     apply_backend_overrides,
@@ -195,14 +197,26 @@ def chat(req: ChatRequest):
         }
 
     # ======================================================
-    # 🔵 FLOW NORMAL — ANALYSE + VERROUS BACKEND
+    # 🧠 INTENT GATEKEEPER — FILTRE HAUT NIVEAU
     # ======================================================
-    decision = analyze_question(
-        req.message,
-        (req.snapshot.period.start, req.snapshot.period.end),
-    )
+    intent = intent_gatekeeper(req.message)
 
-    decision = apply_backend_overrides(req.message, decision)
+    if intent["intent_type"] == "RECOMMENDATION":
+        decision = {"type": "RECOMMENDATION"}
+
+    elif intent["intent_type"] in {"QUESTION", "ACTION"}:
+        decision = analyze_question(
+            req.message,
+            (req.snapshot.period.start, req.snapshot.period.end),
+        )
+        decision = apply_backend_overrides(req.message, decision)
+
+    else:
+        # déclaration / small talk
+        return {
+            "type": "ANSWER_NOW",
+            "reply": answer_small_talk(req.message, session_id),
+        }
 
     print("\n================= DECISION =================")
     print("🧠 DECISION :", decision)
