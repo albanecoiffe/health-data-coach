@@ -179,17 +179,5 @@ Le système **corrige les habitudes** plutôt que de les reproduire aveuglément
 ## 🚧 Fonctionnalités en cours / à venir
 
 * Recommandations multi-semaines
-* Détection de ruptures longues
-* Visualisations avancées
-* Personnalisation des seuils
-* Export insights utilisateur
 
----
 
-## 👤 Auteur
-
-Projet personnel orienté **data, sport et systèmes intelligents**, avec une attention particulière portée à l’**explicabilité**, à la **robustesse** et à l’**expérience utilisateur**.
-
----
-
-🏃‍♂️ *Un coach qui comprend vos données avant de vous parler.*
