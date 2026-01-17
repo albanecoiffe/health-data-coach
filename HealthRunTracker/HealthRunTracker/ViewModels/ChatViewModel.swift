@@ -23,7 +23,7 @@ struct PeriodPayload: Codable {
     let start: String
     let end: String
 }
-let baseURL = "http://192.168.1.113:8000"
+let baseURL = "http://192.168.1.156:8000"
 
 
 class ChatViewModel: ObservableObject {
@@ -34,7 +34,7 @@ class ChatViewModel: ObservableObject {
     private let healthManager: HealthManager
     
     // METTRE FALSE QUAND ON VEUT PAS TELECHARGER LES CSV
-    private let shouldRefreshCSVOnAppear = false
+    private let shouldRefreshCSVOnAppear = true
     
     func refreshSessionsCSVIfNeeded() {
         guard shouldRefreshCSVOnAppear else {
