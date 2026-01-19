@@ -24,18 +24,23 @@ Le projet repose sur deux briques principales :
 ```
 Health Data Coach
 │
-├── HealthRunTracker/        # App iOS (SwiftUI)
-│   ├── HealthKit access
-│   ├── Data export (CSV)
-│   └── Chat UI, graphs
+├── HealthRunTracker/              # iOS application (SwiftUI)
+│   ├── HealthKit data access
+│   ├── Local data aggregation
+│   ├── Snapshot and CSV generation
+│   ├── Chat interface and visualizations
+│   └── Weekly, monthly, and yearly summaries
 │
-├── HealthCoachBackend/      # Backend Python
-│   ├── FastAPI
-│   ├── NLP / LLM routing
-│   ├── Recommendation engine
-│   └── ML models
+├── HealthCoachBackend/            # Python backend
+│   ├── FastAPI REST API
+│   ├── Intent detection and routing
+│   ├── Snapshot-based data analysis
+│   ├── Recommendation and coaching engine
+│   ├── Agent-based logic
+│   └── LLM integration (via Ollama)
 │
-└── models/                  # Modèles ML entraînés (joblib)
+└── models/                        # Trained machine learning models
+    └── Serialized models (joblib)
 ```
 
 ---
