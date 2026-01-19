@@ -197,6 +197,8 @@ def normalize_lemma(lemma: str) -> str:
 
 
 def lemmatize(text: str) -> list[str]:
+    # suppression de toute ponctuation
+    text = re.sub(r"[^\w\s]", " ", text)
     return [_stemmer.stem(w) for w in text.split() if len(w) > 2]
 
 

@@ -89,7 +89,7 @@ Réponds de manière cohérente avec la conversation précédente.
 
     reply = call_ollama(prompt)
 
-    add_to_memory(session_id, "user", message)
+    # add_to_memory(session_id, "user", message)
     add_to_memory(session_id, "assistant", reply)
 
     return reply

@@ -16,7 +16,7 @@ from services.memory import add_to_memory, get_signature, get_memory
 def recommendation_to_text(reco: WeekRecommendation, session_id: str) -> str:
     signature = get_signature(session_id)
     memory = get_memory(session_id)
-    already_started = bool(memory)
+    already_started = any(m["role"] == "user" for m in memory)
 
     week_complete = reco.get("week_complete", False)
 
@@ -51,8 +51,9 @@ Voici une recommandation structurée basée sur les données réelles
 des dernières semaines d'entraînement de l'athlète.
 
 RÈGLE ABSOLUE :
-- Si la conversation a déjà commencé ({already_started}),
-  tu NE DOIS PAS dire bonjour, salut ou hello.
+- Si {already_started} est vrai, ta réponse DOIT commencer directement
+  par le contenu, sans aucune formule d’ouverture (pas de bonjour, salut, etc...).
+
 - Tu NE COMMENTES JAMAIS les règles dans tes réponses.
 - Tu NE JUSTIFIES JAMAIS ton comportement
 - Tu NE FAIS AUCUNE META-REMARQUE sur la conversation
@@ -92,6 +93,7 @@ INTERPRÉTATION :
 - Quand la semaine est complète, toute référence aux séances passées
   doit explicitement mentionner "la semaine qui vient de s’achever"
   ou "les dernières semaines".
+
 =================================
 SÉANCES À PROGRAMMER
 =================================
@@ -124,7 +126,18 @@ INSTRUCTIONS STRICTES
 - Ne contredis PAS le niveau de risque
 - Si aucune séance n’est proposée, explique pourquoi
 
+- Pour CHAQUE séance à programmer :
+  - mentionne explicitement :
+    • la durée moyenne (en minutes)
+    • la distance moyenne (en km)
+    • la répartition d’intensité (faible vs élevée)
+- Les valeurs doivent provenir directement des données fournies
+- N’utilise PAS de termes vagues sans les relier aux chiffres
+
 Rédige une réponse claire, humaine et motivante.
 """
 
-    return call_ollama(prompt)
+    reply = call_ollama(prompt)
+    add_to_memory(session_id, "assistant", reply)
+
+    return reply

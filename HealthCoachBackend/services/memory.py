@@ -31,3 +31,20 @@ def store_signature(session_id: str, signature: dict):
 
 def get_signature(session_id: str) -> dict | None:
     return _signature_store.get(session_id)
+
+
+# ======================================================
+# 🧠 LAST METRIC STORAGE (PAR SESSION)
+# ======================================================
+
+_last_metric_store: dict[str, str] = {}
+
+
+def set_last_metric(session_id: str, metric: str):
+    if session_id and metric:
+        _last_metric_store[session_id] = metric
+        print("🧠 LAST METRIC STORED:", session_id, metric)
+
+
+def get_last_metric(session_id: str) -> str | None:
+    return _last_metric_store.get(session_id)

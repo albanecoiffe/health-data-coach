@@ -9,17 +9,28 @@ class Period(BaseModel):
 
 
 class WeeklyTotals(BaseModel):
-    distance_km: float
-    duration_min: float
-    sessions: int
-    elevation_m: float
-    avg_hr: Optional[float] = None
+    distance_km: float  # nombre de km
+    duration_min: float  # temps de course en min
+    sessions: int  # nombre de seance de running
+    elevation_m: float  # le denivelé possitif lors des seances de running en metre
+    avg_hr: Optional[float] = None  # frequence cardiaque moyenne en BPM
 
 
 class TrainingLoad(BaseModel):
-    load_7d: float
-    load_28d: float
-    ratio: float
+    load_7d: float  # Charge d’entraînement totale calculée sur les 7 derniers jours. (Somme des charges de chaque séance sur la période de 7 jours.)
+    load_28d: float  # Charge d’entraînement cumulée sur les 28 derniers jours. (Représente la charge “habituelle” ou chronique.)
+    ratio: float  # ratio = load_7d / load_28d
+
+
+# La charge d’entraînement est un indicateur qui mesure l’effort réel fourni par ton corps sur une période donnée.
+# Elle ne dépend pas seulement de la distance parcourue, mais aussi du temps passé à courir et de l’intensité de l’effort.
+# La charge est calculée séance par séance, puis additionnée sur la période (par exemple une semaine).
+# Pour chaque séance, on prend en compte deux éléments : La durée totale de la séance (en minutes) & La part de temps passée à haute intensité (zones cardiaques Z4 et Z5)
+
+# calcul pour 1 seance :
+# On calcule la part d’intensité élevée : Intensité élevée (%) =(temps en Z4 + temps en Z5) ÷ durée totale
+# On applique cette intensité à la durée : Charge de la séance = durée × (1 + 2 × intensité élevée)
+# Le facteur 2 signifie que les minutes à haute intensité comptent environ deux fois plus que les minutes faciles.
 
 
 class DailyRun(BaseModel):
@@ -66,7 +77,7 @@ class SnapshotBatchPayload(BaseModel):
 
 
 # ======================================================
-# 🧠 RUNNER SIGNATURE (LONG-TERM PROFILE)
+# 🧠 RUNNER SIGNATURE (LONG-TERM PROFILE) : 52 dernières semaines
 # ======================================================
 
 
@@ -77,43 +88,47 @@ class SignaturePeriod(BaseModel):
 
 
 class VolumeSignature(BaseModel):
-    weekly_avg_km: float
-    weekly_std_km: float
-    trend_12w_pct: float
+    weekly_avg_km: float  # Distance moyenne courue par semaine sur la période analysée.
+    weekly_std_km: float  # Variabilité du volume hebdomadaire. Plus la valeur est élevée, plus l’entraînement est irrégulier.
+    trend_12w_pct: float  # Évolution du volume sur les 12 dernières semaines (en %).
 
 
 class DurationSignature(BaseModel):
-    weekly_avg_min: float
-    weekly_std_min: float
+    weekly_avg_min: float  # Durée moyenne d’entraînement par semaine.
+    weekly_std_min: float  # Variabilité de la durée hebdomadaire.
 
 
 class FrequencySignature(BaseModel):
-    weekly_avg_sessions: float
-    weekly_std_sessions: float
+    weekly_avg_sessions: float  # Nombre moyen de séances par semaine.
+    weekly_std_sessions: float  # Régularité du nombre de séances.
 
 
 class IntensitySignature(BaseModel):
-    z4_z5_avg_pct: float
-    z4_z5_trend_12w_pct: float
-    z1_z3_avg_pct: float
+    z4_z5_avg_pct: float  # Part moyenne du temps passé à haute intensité.
+    z4_z5_trend_12w_pct: (
+        float  # Évolution récente (sur les 12 dernieres semaines) de l’intensité.
+    )
+    z1_z3_avg_pct: float  # Part du temps passé en endurance / faible intensité.
 
 
 class LoadSignature(BaseModel):
-    weekly_avg_load: float
-    weekly_std_load: float
-    acwr_avg: float
-    acwr_max: float
+    weekly_avg_load: float  # Charge moyenne hebdomadaire. (volume, temps d’entraînement, intensité (z4+z5))
+    weekly_std_load: float  # Variabilité de la charge.
+    acwr_avg: float  # Ratio charge aiguë (4 sem) / chronique moyen (12 sem)
+    acwr_max: float  # Pic maximal observé (zone de risque potentiel).
 
 
 class RegularitySignature(BaseModel):
-    weeks_with_runs_pct: float
-    longest_break_days: int
+    weeks_with_runs_pct: float  # Pourcentage de semaines avec au moins une séance.
+    longest_break_days: int  # durée maximale d’une interruption complète d’entraînement(semaines consécutives sans aucune séance). Indicateur de rupture prolongée, pas de récupération normale
 
 
 class RobustnessSignature(BaseModel):
     injury_free_weeks_pct: float
     max_consecutive_weeks: int
-    breaks_over_7d_count: int = Field(alias="breaks_over7d_count")
+    breaks_over_7d_count: int = Field(
+        alias="breaks_over7d_count"
+    )  # Nombre de pauses supérieures à 7 jours.
 
     class Config:
         allow_population_by_field_name = True

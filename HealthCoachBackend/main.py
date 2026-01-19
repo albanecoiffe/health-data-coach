@@ -18,7 +18,12 @@ from services.intent import (
 )
 from services.periods import snapshot_matches_iso
 import pandas as pd
-from services.memory import store_signature
+from services.memory import (
+    store_signature,
+    set_last_metric,
+    get_last_metric,
+    add_to_memory,
+)
 
 
 app = FastAPI()
@@ -76,17 +81,16 @@ def chat(req: ChatRequest):
     print("🔥 meta =", req.meta)
 
     session_id = (req.meta or {}).get("session_id")
+    # 🔴 MÉMOIRE — message utilisateur (CRITIQUE)
+    if session_id:
+        add_to_memory(session_id, "user", req.message)
+
     # ======================================================
     # 🧠 SIGNATURE INGESTION
     # ======================================================
     if req.signature and session_id:
-        store_signature(session_id, req.signature.model_dump())
-
-    signature = req.signature
-    session_id = req.meta.get("session_id")
-    if signature:
         print("🧠 SIGNATURE RECEIVED")
-        store_signature(session_id, signature)
+        store_signature(session_id, req.signature.model_dump())
 
     # ======================================================
     # 🔒 SNAPSHOT EXACT DÉJÀ FOURNI → RÉPONSE DIRECTE
@@ -97,19 +101,24 @@ def chat(req: ChatRequest):
         reply_mode = req.meta.get("reply_mode", "FACTUAL")
         metric = req.meta.get("metric", "DISTANCE")
 
-        if req_start and req_end:
-            if snapshot_matches_iso(req.snapshot, req_start, req_end):
-                print("🟢 SNAPSHOT EXACT — RÉPONSE DIRECTE (NO LLM)")
+        if snapshot_matches_iso(req.snapshot, req_start, req_end):
+            print("🟢 SNAPSHOT EXACT — RÉPONSE DIRECTE (NO LLM)")
 
-                if reply_mode == "SUMMARY":
-                    reply = summary_response(req.snapshot)["reply"]
-                else:
-                    reply = factual_response(req.snapshot, metric)["reply"]
+            if reply_mode == "SUMMARY":
+                reply = summary_response(req.snapshot)["reply"]
+            else:
+                reply = factual_response(req.snapshot, metric)["reply"]
 
-                return {
-                    "type": "ANSWER_NOW",
-                    "reply": reply,
-                }
+            # 🧠 MÉMOIRE — réponse assistant (CRITIQUE)
+            add_to_memory(session_id, "assistant", reply)
+
+            # 🧠 STOCKAGE DE LA MÉTRIQUE
+            set_last_metric(session_id, metric)
+
+            return {
+                "type": "ANSWER_NOW",
+                "reply": reply,
+            }
 
     # ======================================================
     # 🔴 COMPARAISON FINALE — PRIORITÉ ABSOLUE
@@ -211,6 +220,26 @@ def chat(req: ChatRequest):
         )
         decision = apply_backend_overrides(req.message, decision)
 
+        # ======================================================
+        # 🔁 HÉRITAGE DE MÉTRIQUE (CONTEXTE IMPLICITE)
+        # ======================================================
+        last_metric = get_last_metric(session_id)
+
+        if last_metric:
+            # Cas 1 — aucune métrique détectée
+            if "metric" not in decision or decision.get("metric") in {None, "UNKNOWN"}:
+                decision["metric"] = last_metric
+                print("🧠 METRIC INHERITED (missing):", last_metric)
+
+            # Cas 2 — métrique par défaut injectée par le LLM
+            elif decision.get("metric") == "DISTANCE":
+                # heuristique linguistique simple
+                if req.message.lower().startswith(
+                    ("et ", "et de", "et celle", "et celui")
+                ):
+                    decision["metric"] = last_metric
+                    print("🧠 METRIC OVERRIDDEN (elliptical):", last_metric)
+
     else:
         # déclaration / small talk
         return {
@@ -236,6 +265,13 @@ def chat(req: ChatRequest):
     # 🟢 RÉPONSE FINALE NORMALISÉE
     # ======================================================
     if isinstance(result, dict) and "reply" in result:
+        metric = decision.get("metric")
+        if metric:
+            set_last_metric(session_id, metric)
+
+        if session_id:
+            add_to_memory(session_id, "assistant", result["reply"])
+
         return {
             "type": result.get("type", "ANSWER_NOW"),
             "reply": result["reply"],

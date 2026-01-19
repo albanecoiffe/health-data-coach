@@ -72,7 +72,7 @@ Message utilisateur :
 
     reply = call_ollama(prompt)
 
-    add_to_memory(session_id, "user", message)
+    # add_to_memory(session_id, "user", message)
     add_to_memory(session_id, "assistant", reply)
 
     return reply

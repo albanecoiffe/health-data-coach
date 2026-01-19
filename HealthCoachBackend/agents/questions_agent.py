@@ -40,6 +40,20 @@ Retourne EXACTEMENT :
     (distance, km, temps, durée, séance, nombre),
     ALORS ce n’est PAS du small talk.
 
+DATE DU JOUR
+
+Si la question demande explicitement :
+- "quel jour sommes-nous"
+- "quelle est la date"
+- "on est quel jour"
+- "date du jour"
+
+ALORS retourne STRICTEMENT :
+{{
+        "type": "ANSWER_NOW",
+  "answer_mode": "SMALL_TALK"
+}}
+
 ========================================
 2 - CHANGEMENT DE PÉRIODE — SEMAINES
 ========================================
@@ -224,6 +238,7 @@ RÈGLE CRITIQUE :
 
 L’unité temporelle explicite a TOUJOURS priorité
 sur toute autre règle.
+
 ========================================
 9 - PROFIL / HABITUDES LONG TERME (PRIORITÉ ABSOLUE)
 ========================================
@@ -233,6 +248,10 @@ Si la question porte sur :
 - constance
 - habitudes
 - rythme global
+- charge
+- surcharge
+- trop
+- trop d'effort
 - sur le long terme
 - en général
 - d'habitude
@@ -242,6 +261,7 @@ Exemples :
 - "Est-ce que je cours souvent ?"
 - "J’ai une routine stable ?"
 - "Est-ce que je progesse"
+- "Est ce que je suis en surcharge?"
 
 Retourne STRICTEMENT :
 {{
