@@ -164,7 +164,7 @@ EXEMPLE INTERDIT :
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
-- Mentionne au moins 2 métriques chiffrées
+- Mentionne au moins 2 métriques chiffrées obligatoirement
 - Aucun calcul
 - Aucun plan d’entraînement
 - 3 à 5 phrases maximum
@@ -233,7 +233,7 @@ RÈGLE ABSOLUE DE LANGAGE HUMAIN
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
-- Mentionne au moins 2 indicateurs chiffrés
+- Mentionne au moins 2 indicateurs chiffrés obligatoirement
 - Aucun jugement définitif
 - Aucun plan d’entraînement
 - 3 à 5 phrases maximum
@@ -304,7 +304,7 @@ EXEMPLES INTERDITS :
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
-- Mentionne au moins 2 métriques chiffrées
+- Mentionne au moins 2 métriques chiffrées obligatoirement
 - Pas de seuils médicaux
 - Pas de plan d’entraînement
 - 3 à 5 phrases maximum
@@ -403,7 +403,7 @@ EXEMPLES INTERDITS :
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
-- Mentionne AU MOINS 2 indicateurs chiffrés (tu peux en mentionner plus)
+- Mentionne AU MOINS 2 indicateurs chiffrés obligatoirement
 - Parle en termes de tendance, pas de verdict
 - 3 à 5 phrases maximum
 

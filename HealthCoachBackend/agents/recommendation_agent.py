@@ -67,11 +67,10 @@ RÈGLE ABSOLUE :
 CONTEXTE TEMPOREL (IMPORTANT)
 =================================
 
-CONTEXTE TEMPOREL (IMPORTANT) :
-{temporal_context}
-
-INSTRUCTION TEMPORELLE STRICTE :
-{temporal_instruction}
+- {temporal_context}
+- INSTRUCTION TEMPORELLE STRICTE : {temporal_instruction}
+- Séances déjà réalisées cette semaine : {len(reco["done_sessions"])}
+- Séances restantes à programmer : {len(reco["remaining_sessions"])}
 
 
 =================================
@@ -89,17 +88,26 @@ SÉANCES DÉJÀ RÉALISÉES
 Voici les séances déjà effectuées, avec leurs caractéristiques mesurées :
 
 {done_sessions_block}
+OBLIGATION DE RAISONNEMENT (CRITIQUE) :
+
 - Si aucune séance n’a encore été réalisée, tu dois le dire explicitement
   et NE PAS analyser de séances passées.
+
+- Si des séances ont déjà été réalisées, tu dois le dire explicitement
+  avant de parler des séances à programmer.
+- Tu dois d'abord dire le nombre de séances faites et le type (facile / endurance / intensive) des séance.
+- Tu dois dire explicitement la distances de chaque session.
+- Si des séances ont déjà été réalisées, il est STRICTEMENT INTERDIT
+de commencer la réponse directement par les séances à venir.
+
+- Quand la semaine est complète, toute référence aux séances passées
+  doit explicitement mentionner "la semaine qui vient de s’achever"
+  ou "les dernières semaines".
 
 INTERPRÉTATION :
 - high_intensity_pct élevé → séance exigeante
 - low_intensity_pct élevé → séance facile / récup
 - Utilise ces données pour expliquer leur rôle
-- Si toutes les séances prévues ont été réalisées, dis-le explicitement
-- Quand la semaine est complète, toute référence aux séances passées
-  doit explicitement mentionner "la semaine qui vient de s’achever"
-  ou "les dernières semaines".
 
 =================================
 SÉANCES À PROGRAMMER
@@ -153,6 +161,13 @@ INSTRUCTIONS STRICTES
     ou
     "une distance moyenne de A km, pouvant varier entre X et Y km"
 
+=================================
+STRUCTURE OBLIGATOIRE DE LA RÉPONSE :
+=================================
+
+- Paragraphe 1 : reconnaissance des séances déjà réalisées
+- Paragraphe 2 : explication des séances restantes
+- Conclusion : rappel de l’objectif de la semaine et du niveau de risque
 
 Rédige une réponse claire, humaine et motivante.
 """
