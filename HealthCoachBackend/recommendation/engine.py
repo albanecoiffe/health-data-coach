@@ -49,83 +49,48 @@ FEATURES_SESSION = [
 # Session type explanations — Running Coach
 # ============================================================
 
-SESSION_DESCRIPTIONS = {
-    "easy": {
-        "label": "Séance facile",
-        "objective": "Récupération active et maintien du volume",
-        "description": (
-            "Sortie courte à allure confortable, réalisée majoritairement "
-            "en basse intensité. La respiration doit rester facile et "
-            "l’effort ne doit pas générer de fatigue notable."
-        ),
-        "physiology": "Faible stress cardiovasculaire et musculaire",
-        "data_profile": {
-            "avg_duration_min": 38,
-            "avg_distance_km": 5.7,
-            "low_intensity_pct": 0.92,
-        },
-    },
-    "endurance": {
-        "label": "Séance d’endurance",
-        "objective": "Développement de l’endurance aérobie",
-        "description": (
-            "Sortie plus longue à allure modérée, majoritairement en basse intensité. "
-            "L’objectif est de construire une base aérobie solide et "
-            "d’améliorer la capacité à maintenir un effort dans le temps."
-        ),
-        "physiology": "Sollicitation aérobie prolongée, fatigue progressive",
-        "data_profile": {
-            "avg_duration_min": 76,
-            "avg_distance_km": 11.8,
-            "low_intensity_pct": 0.91,
-        },
-    },
-    "intensity": {
-        "label": "Séance intense",
-        "objective": "Amélioration de la vitesse et de la capacité cardiovasculaire",
-        "description": (
-            "Séance structurée avec une part importante d’efforts à haute intensité "
-            "(fractionné, tempo, blocs soutenus). "
-            "Cette séance est exigeante et nécessite une récupération adéquate."
-        ),
-        "physiology": "Stress cardiovasculaire et neuromusculaire élevé",
-        "data_profile": {
-            "avg_duration_min": 66,
-            "avg_distance_km": 11.1,
-            "high_intensity_pct": 0.56,
-        },
-    },
-}
-
 SESSION_PROFILES = {
     "easy": {
         "label": "Séance facile",
         "data_profile": {
-            "avg_duration_min": 38,
-            "avg_distance_km": 5.7,
-            "low_intensity_pct": 0.92,
-            "high_intensity_pct": 0.08,
+            "avg_duration_min": 41,
+            "avg_distance_km": 6.1,
+            "low_intensity_pct": 0.93,
+            "high_intensity_pct": 0.09,
+        },
+        "observed_range": {
+            "distance_km": {"min": 2.5, "max": 8.1},
+            "duration_min": {"min": 17, "max": 56},
         },
     },
     "endurance": {
         "label": "Séance d’endurance",
         "data_profile": {
-            "avg_duration_min": 76,
-            "avg_distance_km": 11.8,
-            "low_intensity_pct": 0.91,
-            "high_intensity_pct": 0.09,
+            "avg_duration_min": 73,
+            "avg_distance_km": 11.5,
+            "low_intensity_pct": 0.89,
+            "high_intensity_pct": 0.11,
+        },
+        "observed_range": {
+            "distance_km": {"min": 8.4, "max": 15.3},
+            "duration_min": {"min": 52, "max": 94},
         },
     },
     "intensity": {
-        "label": "Séance intense",
+        "label": "Séance intensive",
         "data_profile": {
-            "avg_duration_min": 66,
-            "avg_distance_km": 11.1,
-            "low_intensity_pct": 0.44,
+            "avg_duration_min": 71,
+            "avg_distance_km": 12.0,
+            "low_intensity_pct": 0.46,
             "high_intensity_pct": 0.56,
+        },
+        "observed_range": {
+            "distance_km": {"min": 7.0, "max": 21.3},
+            "duration_min": {"min": 41, "max": 115},
         },
     },
 }
+
 
 # ------------------------------------------------------------
 # MAIN ENTRY POINT
@@ -171,7 +136,8 @@ def compute_week_recommendation_from_csv(
     # 6. CONTEXTE TEMPOREL — SEMAINE COURANTE
     # --------------------------------------------------------
 
-    current_week_start = weeks_clustered["week_start"].max()
+    today = pd.Timestamp.today().normalize()
+    current_week_start = today - pd.to_timedelta(today.weekday(), unit="D")
 
     # Par défaut, la semaine courante n'est PAS encore comptée
     completed_weeks = weeks_clustered[
@@ -299,22 +265,6 @@ def compute_week_recommendation_from_csv(
 # ------------------------------------------------------------
 
 
-def _cluster_weeks(df):
-    df = df.dropna(subset=FEATURES_WEEK).copy()
-    X = StandardScaler().fit_transform(df[FEATURES_WEEK])
-    df["cluster_week"] = KMeans(n_clusters=3, random_state=42, n_init=20).fit_predict(X)
-    return df
-
-
-def _cluster_sessions(df):
-    df = df.dropna(subset=FEATURES_SESSION).copy()
-    X = StandardScaler().fit_transform(df[FEATURES_SESSION])
-    df["cluster_session"] = KMeans(
-        n_clusters=3, random_state=42, n_init=20
-    ).fit_predict(X)
-    return df
-
-
 def summarize_done_sessions(current_sessions: pd.DataFrame) -> list[dict]:
     summaries = []
 
@@ -364,7 +314,7 @@ def _compute_risk_scores(df):
 
     def is_risky(row):
         return int(
-            row["cluster_week"] == 1
+            row["cluster_week"] == 0
             or row["weekly_load"] > load_threshold
             or row["high_intensity_pct"] > 0.45
         )
@@ -443,7 +393,6 @@ def enrich_plan_with_descriptions(plan: list[str]) -> list[dict]:
     enriched = []
 
     for session_type in plan:
-        # desc = SESSION_DESCRIPTIONS.get(session_type)
         profile = SESSION_PROFILES.get(session_type)
 
         if profile is None:
@@ -453,10 +402,8 @@ def enrich_plan_with_descriptions(plan: list[str]) -> list[dict]:
             {
                 "type": session_type,
                 "label": profile["label"],
-                # "objective": profile["objective"],
-                # "description": profile["description"],
-                # "physiology": profile["physiology"],
                 "data_profile": profile["data_profile"],
+                "observed_range": profile.get("observed_range"),
             }
         )
 

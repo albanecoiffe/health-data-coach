@@ -198,16 +198,29 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
         }
 
     # ======================================================
-    # 🔴 8️⃣ MOIS NOMMÉ
+    # 🔴 8️⃣ MOIS NOMMÉ (UNIQUEMENT SI QUESTION OU ACTION)
     # ======================================================
     for month_name, month_num in MONTHS.items():
         if re.search(rf"\b{month_name}\b", msg):
-            return {
-                "type": "REQUEST_MONTH",
-                "month": month_num,
-                "year": extract_year(msg),
-                "metric": metric,
-            }
+            # ⚠️ on ne déclenche une requête que si
+            # - le message est une QUESTION ou une ACTION implicite
+            if decision.get("type") in {
+                "REQUEST_WEEK",
+                "REQUEST_MONTH",
+                "REQUEST_MONTH_RELATIVE",
+                "REQUEST_YEAR",
+                "REQUEST_YEAR_RELATIVE",
+                "COMPARE_PERIODS",
+            }:
+                return {
+                    "type": "REQUEST_MONTH",
+                    "month": month_num,
+                    "year": extract_year(msg),
+                    "metric": metric,
+                }
+            else:
+                # contexte narratif → on laisse passer
+                return decision
 
     # ======================================================
     # 🔴 9️⃣ ANNÉES (hors bilan)

@@ -43,6 +43,11 @@ def recommendation_to_text(reco: WeekRecommendation, session_id: str) -> str:
             "Ne parle PAS de semaine suivante. "
             "Parle uniquement du reste de la semaine en cours."
         )
+    done_sessions_block = (
+        "Aucune séance n’a encore été réalisée cette semaine."
+        if not reco["done_sessions_details"]
+        else reco["done_sessions_details"]
+    )
 
     prompt = f"""
 Tu es un coach de course à pied expérimenté.
@@ -83,7 +88,9 @@ SÉANCES DÉJÀ RÉALISÉES
 
 Voici les séances déjà effectuées, avec leurs caractéristiques mesurées :
 
-{reco["done_sessions_details"]}
+{done_sessions_block}
+- Si aucune séance n’a encore été réalisée, tu dois le dire explicitement
+  et NE PAS analyser de séances passées.
 
 INTERPRÉTATION :
 - high_intensity_pct élevé → séance exigeante
@@ -99,6 +106,10 @@ SÉANCES À PROGRAMMER
 =================================
 
 {reco["remaining_sessions"]}
+
+- Les séances listées dans "SÉANCES À PROGRAMMER" n’ont PAS encore été réalisées.
+- Tu ne dois jamais les décrire comme des séances déjà effectuées.
+
 
 INTERPRÉTATION DES DONNÉES :
 - low_intensity_pct > 0.85 → séance majoritairement facile
@@ -133,6 +144,15 @@ INSTRUCTIONS STRICTES
     • la répartition d’intensité (faible vs élevée)
 - Les valeurs doivent provenir directement des données fournies
 - N’utilise PAS de termes vagues sans les relier aux chiffres
+
+- Lorsque des bornes min / max sont fournies pour une séance :
+  - présente la valeur moyenne comme la cible principale
+  - précise que cette cible peut varier dans une plage habituelle
+  - utilise une formulation du type :
+    "vise environ A, avec une variation possible entre X et Y"
+    ou
+    "une distance moyenne de A km, pouvant varier entre X et Y km"
+
 
 Rédige une réponse claire, humaine et motivante.
 """

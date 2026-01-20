@@ -20,6 +20,10 @@ QUESTION_WORDS = [
     "comment",
     "pourquoi",
     "c'est quoi",
+    "connais tu",
+    "as tu",
+    "connaissez vous",
+    "avez vous",
 ]
 
 RECOMMENDATION_VERBS = [
