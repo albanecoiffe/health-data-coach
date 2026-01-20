@@ -162,6 +162,18 @@ EXEMPLE INTERDIT :
 - Tu dois reformuler chaque indicateur en langage naturel
 
 ━━━━━━━━━━━━━━━━━━━━━━
+RÈGLE ABSOLUE DE LANGAGE HUMAIN
+━━━━━━━━━━━━━━━━━━━━━━
+- Tu NE DOIS JAMAIS mentionner de noms de variables techniques
+- Tu dois reformuler chaque indicateur en langage naturel
+
+EXEMPLE INTERDIT : 
+- weekly_avg_load
+- weekly_std_load
+- acwr_avg
+- acwr_max
+
+━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
 ━━━━━━━━━━━━━━━━━━━━━━
 - Mentionne au moins 2 métriques chiffrées obligatoirement
@@ -204,10 +216,10 @@ LEXIQUE — RÉGULARITÉ (OBLIGATOIRE)
   → proportion de semaines où au moins une séance a été réalisée  
   → mesure la continuité dans le temps
 
-- longest_break_days :
-  → durée maximale d’une interruption complète d’entraînement
-    (semaines consécutives sans aucune séance)
-  → indicateur de rupture prolongée, pas de récupération normale
+longest_break_days :
+→ durée maximale d’un arrêt complet d’entraînement
+→ calculée en semaines consécutives sans aucune séance (*7 jours)
+→ indicateur de rupture prolongée, pas de récupération normale
 
 - weekly_std_sessions :
   → variation du nombre de séances par semaine  
@@ -229,6 +241,11 @@ RÈGLE ABSOLUE DE LANGAGE HUMAIN
 ━━━━━━━━━━━━━━━━━━━━━━
 - Tu NE DOIS JAMAIS mentionner de noms de variables techniques
 - Tu dois reformuler chaque indicateur en langage naturel
+
+EXEMPLE INTERDIT : 
+- weeks_with_runs_pct
+- longest_break_days
+- weekly_std_sessions
 
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE
@@ -298,7 +315,9 @@ RÈGLE ABSOLUE DE LANGAGE HUMAIN
 - Tu dois reformuler chaque indicateur en langage naturel
 
 EXEMPLES INTERDITS :
+- current_week_km
 - weekly_avg_km
+- weekly_std_km
 - trend_12w_pct
 
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -357,10 +376,10 @@ LEXIQUE — PROGRESSION (OBLIGATOIRE)
   → proportion de semaines où au moins une séance a été réalisée  
   → mesure la continuité dans le temps
 
-- longest_break_days :
-  → durée maximale d’une interruption complète d’entraînement
-    (semaines consécutives sans aucune séance)
-  → indicateur de rupture prolongée, pas de récupération normale
+longest_break_days :
+→ durée maximale d’un arrêt complet d’entraînement
+→ calculée en semaines consécutives sans aucune séance (*7 jours)
+→ indicateur de rupture prolongée, pas de récupération normale
 
 ━━━━━━━━━━━━━━━━━━━━━━
 INTERPRÉTATION AUTORISÉE
@@ -397,8 +416,11 @@ RÈGLE ABSOLUE DE LANGAGE HUMAIN
 - Tu dois reformuler chaque indicateur en langage naturel
 
 EXEMPLES INTERDITS :
-- acwr_avg
 - trend_12w_pct
+- acwr_avg
+- acwr_max 
+- weeks_with_runs_pct
+- longest_break_days
 
 ━━━━━━━━━━━━━━━━━━━━━━
 RÈGLES DE RÉPONSE

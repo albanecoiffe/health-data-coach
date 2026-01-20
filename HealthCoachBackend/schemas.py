@@ -120,7 +120,13 @@ class LoadSignature(BaseModel):
 
 class RegularitySignature(BaseModel):
     weeks_with_runs_pct: float  # Pourcentage de semaines avec au moins une séance.
-    longest_break_days: int  # durée maximale d’une interruption complète d’entraînement(semaines consécutives sans aucune séance). Indicateur de rupture prolongée, pas de récupération normale
+    longest_break_days: int
+
+
+# La plus longue séquence de semaines consécutives sans aucune séance de running
+# exprimée en jours théoriques (multiples de 7)
+# 1 semaine sans séance → 7 jours
+# 2 semaines consécutives sans séance → 14 jours
 
 
 class RobustnessSignature(BaseModel):
