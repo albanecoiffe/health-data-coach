@@ -87,7 +87,7 @@ def factual_response(snapshot, metric: str) -> dict:
             "reply": (
                 f"Sur la période du {start} au {end}, "
                 f"ta fréquence cardiaque moyenne était de "
-                f"{round(snapshot.totals.avg_hr)} bpm."
+                f"{round(snapshot.totals.avg_hr)} bpm pendant tes courses."
             )
         }
 
