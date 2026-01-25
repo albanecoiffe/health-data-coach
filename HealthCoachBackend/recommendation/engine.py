@@ -246,6 +246,13 @@ def compute_week_recommendation_from_csv(
     # 11. OUTPUT
     # --------------------------------------------------------
 
+    last_week = completed_weeks.iloc[-1]
+
+    previous_week_summary = {
+        "sessions": int(last_week["sessions"]),
+        "distance_km": round(float(last_week["distance_km"]), 1),
+    }
+
     return {
         "target_sessions": avg_sessions,
         "dominant_week_cluster": dominant_cluster,
@@ -257,6 +264,8 @@ def compute_week_recommendation_from_csv(
         "remaining_sessions": enriched_remaining_plan,
         "done_sessions_details": done_sessions_summary,
         "week_complete": week_complete,
+        "previous_week_had_sessions": len(done_sessions_summary) > 0,
+        "previous_week_summary": previous_week_summary,
     }
 
 
