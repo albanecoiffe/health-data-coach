@@ -237,7 +237,7 @@ In such cases, the system would:
 - Propose a safer alternative
 - Explain the risk clearly
 
-3. Progressive Load and Distance Monitoring
+### 3. Progressive Load and Distance Monitoring
 An additional improvement would be to introduce forward-looking load monitoring.
 
 Features:
@@ -251,7 +251,7 @@ This would allow:
 - Smarter long-term progression
 - More adaptive training plans
 
-4. Persistent Data Storage with a Lightweight Database
+### 4. Persistent Data Storage with a Lightweight Database
 Currently, data is processed from CSV files, which is sufficient for prototyping but not optimal for scaling.
 
 Proposed improvement:
