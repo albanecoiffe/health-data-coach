@@ -182,7 +182,88 @@ Le système **corrige les habitudes** plutôt que de les reproduire aveuglément
 ---
 
 ## 🚧 Fonctionnalités en cours / à venir
+Several extensions could significantly enhance the current system, both in terms of intelligence and user experience.
 
-* Recommandations multi-semaines
+### 1. Integration of an External LLM (e.g. Mistral AI)
+One possible improvement would be to integrate an external Large Language Model such as Mistral AI, which offers a free-tier API.
+Objectives:
+- Improve the natural language quality of explanations and recommendations.
+- Generate more contextual, human-like coaching feedback.
+- Keep the core logic deterministic (risk computation, clustering, constraints) while delegating only the verbalization and reasoning to the LLM.
 
+Technical approach:
 
+- The backend would keep full control of:
+    - Training data
+    - Risk indicators
+    - Weekly statistics
+    - Business rules
+
+- The LLM would only receive:
+    - Structured inputs (JSON)
+    - Strict prompts describing what it is allowed and forbidden to do
+
+This separation ensures reliability, reproducibility, and avoids uncontrolled model behavior.
+
+### 2. Personalized Training Plan for Race Preparation
+Another major extension would be to build a long-term training plan generator designed to prepare a runner for a specific race (e.g. 10 km, half-marathon, marathon).
+
+User input questionnaire:
+- To generate such a plan, the user would be asked to provide:
+- Target race and race date
+- Current VMA (or estimated VMA)
+- Previous personal records (5 km, 10 km, half-marathon, etc.)
+- Training objective (finish, improve time, performance target)
+- Usual number of weekly sessions
+- Maximum acceptable number of sessions
+- Preferred training days (optional)
+
+Plan generation logic:
+- The model would generate a progressive multi-week plan
+- Weekly volume would be based on:
+- The runner’s historical average distance
+- The runner’s current training frequency
+- Intensity distribution would follow safe progression rules
+- Key sessions (long run, intensity, recovery) would be scheduled consistently
+
+Built-in safety alerts:
+- The system would automatically detect unrealistic or risky configurations, for example:
+- Requesting 5 sessions per week while the historical average is 3
+- A sudden increase in weekly distance beyond safe thresholds
+- Excessive intensity accumulation over consecutive weeks
+
+In such cases, the system would:
+- Warn the user
+- Propose a safer alternative
+- Explain the risk clearly
+
+3. Progressive Load and Distance Monitoring
+An additional improvement would be to introduce forward-looking load monitoring.
+
+Features:
+- Track expected weekly distance for upcoming weeks
+- Compare projected load with the runner’s historical baseline
+- Visualize gradual progression (or detect abrupt changes)
+- Adjust recommendations dynamically based on real completed sessions
+
+This would allow:
+- Better anticipation of overtraining risk
+- Smarter long-term progression
+- More adaptive training plans
+
+4. Persistent Data Storage with a Lightweight Database
+Currently, data is processed from CSV files, which is sufficient for prototyping but not optimal for scaling.
+
+Proposed improvement:
+- Introduce a lightweight, free-tier database (e.g. SQLite, PostgreSQL free tier, or cloud-based free services)
+
+Benefits:
+- Faster access to historical data
+- Easier session and week aggregation
+- Persistent user profiles and training history
+- Better performance for repeated queries and recommendations
+
+This would also enable:
+- Multi-user support
+- Long-term tracking
+- More advanced analytics without recomputing everything from scratch
