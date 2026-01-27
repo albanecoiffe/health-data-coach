@@ -168,3 +168,27 @@ class ChatRequest(BaseModel):
     snapshots: Optional[SnapshotBatchPayload] = None
     meta: Optional[Dict[str, str]] = None
     signature: Optional[RunnerSignature] = None
+
+
+# ======================================================
+# 🏃‍♂️ RunSession Create Schema
+# ======================================================
+
+from pydantic import BaseModel
+from datetime import datetime
+from uuid import UUID
+
+
+class RunSessionCreate(BaseModel):
+    user_id: UUID
+    start_time: datetime
+
+    distance_km: float
+    duration_min: float
+    avg_hr: float | None = None
+
+    z1_min: float
+    z2_min: float
+    z3_min: float
+    z4_min: float
+    z5_min: float

@@ -31,8 +31,20 @@ from sqlalchemy import text
 
 from services.database import engine
 
+from fastapi import Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+
+from services.database import SessionLocal
+from models import RunSession
+from schemas import RunSessionCreate
+
 
 app = FastAPI()
+
+# =====================================================
+# 🏥 ENDPOINTS data
+# =====================================================
 
 router = APIRouter()
 
@@ -55,6 +67,43 @@ from services.database import engine
 def list_tables():
     inspector = inspect(engine)
     return inspector.get_table_names()
+
+
+# ======================================================
+# 🏃 ENDPOINTS SÉANCES DE COURSE
+# ======================================================
+@app.post("/api/run-session")
+def ingest_run_session(
+    payload: RunSessionCreate,
+):
+    db = SessionLocal()
+
+    try:
+        session = RunSession(
+            user_id=payload.user_id,
+            start_time=payload.start_time,
+            distance_km=payload.distance_km,
+            duration_min=payload.duration_min,
+            avg_hr=payload.avg_hr,
+            z1_min=payload.z1_min,
+            z2_min=payload.z2_min,
+            z3_min=payload.z3_min,
+            z4_min=payload.z4_min,
+            z5_min=payload.z5_min,
+        )
+
+        db.add(session)
+        db.commit()
+
+        return {"status": "inserted"}
+
+    except IntegrityError:
+        db.rollback()
+        # Doublon (user_id + start_time)
+        return {"status": "duplicate"}
+
+    finally:
+        db.close()
 
 
 # ======================================================
