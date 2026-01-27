@@ -44,6 +44,22 @@ def db_health():
     return {"db": "ok"}
 
 
+# =====================================================
+# 🛠️ ENDPOINTS DE DEBUG
+# =====================================================
+from sqlalchemy import inspect
+from services.database import engine
+
+
+@app.get("/debug/tables")
+def list_tables():
+    inspector = inspect(engine)
+    return inspector.get_table_names()
+
+
+# ======================================================
+# 📊 ENDPOINTS D'IMPORTATION DE CSV
+# ======================================================
 @app.post("/upload-weeks-csv")
 async def upload_csv(file: UploadFile = File(...)):
     df = pd.read_csv(file.file)
