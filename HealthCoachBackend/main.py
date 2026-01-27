@@ -25,8 +25,23 @@ from services.memory import (
     add_to_memory,
 )
 
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+
+from services.database import engine
+
 
 app = FastAPI()
+
+router = APIRouter()
+
+
+@app.get("/health/db")
+def db_health():
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return {"db": "ok"}
 
 
 @app.post("/upload-weeks-csv")
