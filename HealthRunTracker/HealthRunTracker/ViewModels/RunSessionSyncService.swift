@@ -11,6 +11,8 @@ final class RunSessionSyncService {
     }
 
     func upload(_ session: RunSession) {
+        
+        print("📤 POST run-session:", session.startDate)
 
         guard let url = URL(string: "\(baseURL)/api/run-session") else {
             return
