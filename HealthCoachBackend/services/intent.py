@@ -11,7 +11,7 @@ from agents.questions_agent import analyze_question
 from agents.summary_agent import summary_response
 from agents.recommendation_agent import recommendation_to_text
 from agents.coaching_agent import answer_coaching
-from schemas import ChatRequest
+from schemas.schemas import ChatRequest
 from services.periods import (
     period_to_dates,
     extract_year,

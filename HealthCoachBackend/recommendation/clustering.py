@@ -30,12 +30,11 @@ FEATURES_SESSION = [
 # ------------------------------------------------------------
 # Modeles
 # ------------------------------------------------------------
-scaler_sessions = joblib.load("models/scaler_session.joblib")
-kmeans_sessions = joblib.load("models/kmeans3_session.joblib")
+scaler_sessions = joblib.load("recommendation/models/scaler_session.joblib")
+kmeans_sessions = joblib.load("recommendation/models/kmeans3_session.joblib")
 
-scaler_week = joblib.load("models/scaler_week.joblib")
-kmeans_week = joblib.load("models/kmeans3_week.joblib")
-
+scaler_week = joblib.load("recommendation/models/scaler_week.joblib")
+kmeans_week = joblib.load("recommendation/models/kmeans3_week.joblib")
 # ------------------------------------------------------------
 # PUBLIC API
 # ------------------------------------------------------------

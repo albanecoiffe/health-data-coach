@@ -1,5 +1,5 @@
-from services.coaching.dispatcher import detect_coaching_type
-from services.coaching.rules import (
+from coaching.dispatcher import detect_coaching_type
+from coaching.rules import (
     analyze_regularity,
     analyze_volume,
     analyze_load,

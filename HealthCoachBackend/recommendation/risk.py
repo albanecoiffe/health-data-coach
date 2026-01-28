@@ -19,7 +19,7 @@ FEATURES_RISK = [
     "high_intensity_pct",
 ]
 
-risk_pipeline = joblib.load("models/risk_pipeline.joblib")
+risk_pipeline = joblib.load("recommendation/models/risk_pipeline.joblib")
 
 
 # ------------------------------------------------------------

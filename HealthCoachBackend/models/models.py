@@ -8,7 +8,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID
 
-from services.database import Base
+from database import Base
 
 
 class RunSession(Base):
