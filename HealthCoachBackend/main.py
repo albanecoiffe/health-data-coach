@@ -45,6 +45,7 @@ from api.snapshots import router as snapshots_router
 from api.health import router as health_router
 from api.imports import router as imports_router
 from api.errors import validation_exception_handler
+from api.signature import router as signature_router
 from api.chat import router as chat_router
 
 app = FastAPI()
@@ -57,6 +58,8 @@ app.include_router(snapshots_router)
 app.include_router(runs_router)
 app.include_router(imports_router)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+
+app.include_router(signature_router)
 
 
 @app.get("/")
