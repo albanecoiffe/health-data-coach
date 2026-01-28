@@ -10,6 +10,10 @@ from agents.summary_agent import summary_response
 from agents.factual_agent import factual_response
 from agents.questions_agent import analyze_question
 from services.intent_gatekeeper import intent_gatekeeper
+from services.snapshot import build_snapshot_from_db
+from datetime import datetime
+from uuid import UUID
+from database import SessionLocal
 
 from services.intent import (
     apply_backend_overrides,
@@ -26,6 +30,14 @@ from services.memory import (
 )
 from fastapi import APIRouter, Depends
 
+import os
+from uuid import UUID
+
+DEFAULT_USER_ID = (
+    UUID(os.getenv("DEFAULT_USER_ID")) if os.getenv("DEFAULT_USER_ID") else None
+)
+
+
 router = APIRouter()
 
 
@@ -40,11 +52,50 @@ def chat(req: ChatRequest):
     print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
     print("🔥 snapshots =", req.snapshots)
     print("🔥 meta =", req.meta)
+    print("🧪 META REÇU :", req.meta)
 
     session_id = (req.meta or {}).get("session_id")
     # 🔴 MÉMOIRE — message utilisateur (CRITIQUE)
     if session_id:
         add_to_memory(session_id, "user", req.message)
+
+    # ======================================================
+    # 🔁 BACKEND SNAPSHOT OVERRIDE (ÉTAPE 5.5)
+    # ======================================================
+    if req.meta:
+        requested_start = req.meta.get("requested_start")
+        requested_end = req.meta.get("requested_end")
+
+        # fallback: si Swift n'envoie pas user_id, on utilise le user par défaut
+        user_id_str = req.meta.get("user_id")
+        user_uuid = UUID(user_id_str) if user_id_str else DEFAULT_USER_ID
+
+        if requested_start and requested_end:
+            print("🟠 BACKEND SNAPSHOT OVERRIDE (DB is source of truth)")
+
+            db = SessionLocal()
+            try:
+                backend_snapshot = build_snapshot_from_db(
+                    db=db,
+                    user_id=user_uuid,
+                    start=datetime.fromisoformat(requested_start),
+                    end=datetime.fromisoformat(requested_end),
+                )
+
+                # 🔥 ON ÉCRASE LE SNAPSHOT SWIFT
+                req.snapshot = backend_snapshot
+
+                print(
+                    "✅ Snapshot backend utilisé :",
+                    backend_snapshot.period.start,
+                    "→",
+                    backend_snapshot.period.end,
+                    "|",
+                    backend_snapshot.totals.distance_km,
+                    "km",
+                )
+            finally:
+                db.close()
 
     # ======================================================
     # 🧠 SIGNATURE INGESTION

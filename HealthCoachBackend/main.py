@@ -38,6 +38,8 @@ from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 from models.models import RunSession
 from schemas.schemas import RunSessionCreate
+from services.snapshot import build_snapshot_from_db
+
 from api.runs import router as runs_router
 from api.snapshots import router as snapshots_router
 from api.health import router as health_router
