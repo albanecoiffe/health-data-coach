@@ -11,6 +11,7 @@ from agents.factual_agent import factual_response
 from agents.questions_agent import analyze_question
 from services.intent_gatekeeper import intent_gatekeeper
 from services.snapshot import build_snapshot_from_db
+from services.signature_builder import build_runner_signature
 from datetime import datetime
 from uuid import UUID
 from database import SessionLocal
@@ -96,6 +97,35 @@ def chat(req: ChatRequest):
                 )
             finally:
                 db.close()
+
+    # ======================================================
+    # 🧠 BACKEND SIGNATURE = SOURCE OF TRUTH (ÉTAPE 6)
+    # ======================================================
+    if session_id:
+        print("🟠 BACKEND SIGNATURE OVERRIDE (FORCED)")
+
+        user_uuid = (
+            UUID(req.meta.get("user_id"))
+            if req.meta and req.meta.get("user_id")
+            else DEFAULT_USER_ID
+        )
+
+        if not user_uuid:
+            raise HTTPException(status_code=400, detail="Missing user_id")
+
+        db = SessionLocal()
+        try:
+            signature = build_runner_signature(
+                db=db,
+                user_id=user_uuid,
+            )
+
+            # 🔥 ÉCRASE TOUJOURS LA SIGNATURE SWIFT
+            req.signature = signature
+
+            print("✅ Signature backend utilisée (override)")
+        finally:
+            db.close()
 
     # ======================================================
     # 🧠 SIGNATURE INGESTION
