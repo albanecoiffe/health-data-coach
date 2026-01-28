@@ -256,7 +256,7 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
 
 def route_decision(req: ChatRequest, decision: dict):
     meta = req.meta or {}
-    session_id = meta.get("session_id", "default")
+    session_id = meta.session_id if meta else None
     metric = decision.get("metric", "DISTANCE")
 
     # ======================================================

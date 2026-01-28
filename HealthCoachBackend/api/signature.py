@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 
 from database import SessionLocal
-from services.signature_builder import build_runner_signature
+from services.signature.builder import build_runner_signature
 from schemas.signature import RunnerSignature
 
 router = APIRouter(prefix="/api")

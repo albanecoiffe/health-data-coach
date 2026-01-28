@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from database import SessionLocal
-from services.snapshot import build_snapshot_from_db
+from services.snapshot.builder import build_snapshot_from_db
 from schemas.schemas import WeeklySnapshot
 from uuid import UUID
 

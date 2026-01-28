@@ -2,6 +2,7 @@ from typing import Optional, Dict, List
 from pydantic import BaseModel
 from pydantic import Field
 from schemas.signature import RunnerSignature
+from schemas.meta import ChatMeta
 
 
 class Period(BaseModel):
@@ -83,7 +84,7 @@ class ChatRequest(BaseModel):
     message: str
     snapshot: Snapshot
     snapshots: Optional[SnapshotBatchPayload] = None
-    meta: Optional[Dict[str, str]] = None
+    meta: Optional[ChatMeta] = None
     signature: Optional[RunnerSignature] = None
 
 

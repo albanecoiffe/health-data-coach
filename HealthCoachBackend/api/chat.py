@@ -10,10 +10,11 @@ from agents.summary_agent import summary_response
 from agents.factual_agent import factual_response
 from agents.questions_agent import analyze_question
 from services.intent_gatekeeper import intent_gatekeeper
-from services.snapshot import build_snapshot_from_db
-from services.signature_builder import build_runner_signature
+from services.snapshot.builder import build_snapshot_from_db
+from services.signature.builder import build_runner_signature
+from services.signature.service import get_or_build_signature
+
 from datetime import datetime
-from uuid import UUID
 from database import SessionLocal
 
 from services.intent import (
@@ -55,7 +56,8 @@ def chat(req: ChatRequest):
     print("🔥 meta =", req.meta)
     print("🧪 META REÇU :", req.meta)
 
-    session_id = (req.meta or {}).get("session_id")
+    session_id = req.meta.session_id if req.meta else None
+
     # 🔴 MÉMOIRE — message utilisateur (CRITIQUE)
     if session_id:
         add_to_memory(session_id, "user", req.message)
@@ -64,11 +66,11 @@ def chat(req: ChatRequest):
     # 🔁 BACKEND SNAPSHOT OVERRIDE (ÉTAPE 5.5)
     # ======================================================
     if req.meta:
-        requested_start = req.meta.get("requested_start")
-        requested_end = req.meta.get("requested_end")
+        requested_start = req.meta.requested_start if req.meta else None
+        requested_end = req.meta.requested_end if req.meta else None
 
         # fallback: si Swift n'envoie pas user_id, on utilise le user par défaut
-        user_id_str = req.meta.get("user_id")
+        user_id_str = req.meta.user_id if req.meta else None
         user_uuid = UUID(user_id_str) if user_id_str else DEFAULT_USER_ID
 
         if requested_start and requested_end:
@@ -99,15 +101,11 @@ def chat(req: ChatRequest):
                 db.close()
 
     # ======================================================
-    # 🧠 BACKEND SIGNATURE = SOURCE OF TRUTH (ÉTAPE 6)
+    # 🧠 BACKEND SIGNATURE (SOURCE OF TRUTH)
     # ======================================================
     if session_id:
-        print("🟠 BACKEND SIGNATURE OVERRIDE (FORCED)")
-
         user_uuid = (
-            UUID(req.meta.get("user_id"))
-            if req.meta and req.meta.get("user_id")
-            else DEFAULT_USER_ID
+            UUID(req.meta.user_id) if req.meta and req.meta.user_id else DEFAULT_USER_ID
         )
 
         if not user_uuid:
@@ -115,15 +113,7 @@ def chat(req: ChatRequest):
 
         db = SessionLocal()
         try:
-            signature = build_runner_signature(
-                db=db,
-                user_id=user_uuid,
-            )
-
-            # 🔥 ÉCRASE TOUJOURS LA SIGNATURE SWIFT
-            req.signature = signature
-
-            print("✅ Signature backend utilisée (override)")
+            req.signature = get_or_build_signature(db, user_uuid)
         finally:
             db.close()
 
@@ -138,10 +128,10 @@ def chat(req: ChatRequest):
     # 🔒 SNAPSHOT EXACT DÉJÀ FOURNI → RÉPONSE DIRECTE
     # ======================================================
     if req.meta:
-        req_start = req.meta.get("requested_start")
-        req_end = req.meta.get("requested_end")
-        reply_mode = req.meta.get("reply_mode", "FACTUAL")
-        metric = req.meta.get("metric", "DISTANCE")
+        req_start = req.meta.requested_start
+        req_end = req.meta.requested_end
+        reply_mode = req.meta.reply_mode or "FACTUAL"
+        metric = req.meta.metric or "DISTANCE"
 
         if snapshot_matches_iso(req.snapshot, req_start, req_end):
             print("🟢 SNAPSHOT EXACT — RÉPONSE DIRECTE (NO LLM)")
@@ -230,11 +220,11 @@ def chat(req: ChatRequest):
         # 🧠 TEXTE HUMAIN (LLM, SANS CHIFFRES)
         narrative_text = comparison_response_agent(
             message=req.message,
-            metric=req.meta.get("metric", "DISTANCE"),
+            metric=req.meta.metric,
             delta=delta,
             left_period=(left.period.start, left.period.end),
             right_period=(right.period.start, right.period.end),
-            period_context=req.meta.get("period_context"),
+            period_context=req.meta.period_context,
         )
 
         # 🧩 ASSEMBLAGE FINAL
