@@ -8,7 +8,7 @@ import Charts
 struct ContentView: View {
     @ObservedObject var healthManager: HealthManager
     @State private var weekOffset: Int = 0
-    @State private var previousWeekData: [HealthManager.DailyRunData] = []
+    @State private var previousWeekData: [DailyRunData] = []
 
 
     var body: some View {
@@ -153,7 +153,7 @@ struct WeekStatsGrid: View {
 // -----------------------------------------------------------
 
 struct WeekChartView: View {
-    let weeklyData: [HealthManager.DailyRunData]
+    let weeklyData: [DailyRunData]
 
     var body: some View {
         Chart(weeklyData) { dataPoint in
@@ -181,7 +181,7 @@ struct WeekChartView: View {
 // -----------------------------------------------------------
 
 struct WeekSessionRecapView: View {
-    let weeklyData: [HealthManager.DailyRunData]
+    let weeklyData: [DailyRunData]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -204,7 +204,7 @@ struct WeekSessionRecapView: View {
 // -----------------------------------------------------------
 
 struct SessionCard: View {
-    let session: HealthManager.DailyRunData
+    let session: DailyRunData
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -345,8 +345,8 @@ struct SessionCard: View {
 // -----------------------------------------------------------
 
 struct WeekComparisonView: View {
-    let currentWeekData: [HealthManager.DailyRunData]
-    let previousWeekData: [HealthManager.DailyRunData]
+    let currentWeekData: [DailyRunData]
+    let previousWeekData: [DailyRunData]
 
     private func diffColor(_ v: Double) -> Color {
         v > 0 ? .green : (v < 0 ? .red : .gray)

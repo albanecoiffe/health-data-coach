@@ -44,14 +44,14 @@ class ChatViewModel: ObservableObject {
 
         print("🔄 Refresh sessions CSV")
 
-        healthManager.fetchRunSessions(
+        healthManager.fetchRunSessionsClean(
             from: Calendar.current.date(byAdding: .month, value: -24, to: Date())!,
             to: Date()
         ) { sessions in
             print("🧪 Sessions fetched:", sessions.count)
 
-            self.healthManager.exportSessionsToCSV(sessions)
-            self.healthManager.uploadSessionsCSVToBackend()
+            RunSessionDebugTools.exportSessionsToCSV(sessions)
+            RunSessionDebugTools.uploadSessionsCSVToBackend()
         }
     }
 
@@ -81,7 +81,6 @@ class ChatViewModel: ObservableObject {
         } else {
             print("⏭️ CSV generation disabled")
         }
-        healthManager.syncRunSessionsToBackend()
 
     }
 
@@ -118,8 +117,11 @@ class ChatViewModel: ObservableObject {
 
             print("📤 ASK COACH:", message)
 
-            healthManager.makeSnapshot(from: interval.start, to: interval.end) { snapshot in
-
+            SnapshotBuilder.makeSnapshot(
+                healthManager: healthManager,
+                from: interval.start,
+                to: interval.end
+            ) { snapshot in
                 print("📦 SNAPSHOT SENT:",
                       snapshot.totals.sessions, "séances /",
                       snapshot.totals.distanceKm, "km")
@@ -329,7 +331,7 @@ class ChatViewModel: ObservableObject {
             enrichedMeta["metric"] = enrichedMeta["metric"] ?? "DISTANCE"
             enrichedMeta["reply_mode"] = enrichedMeta["reply_mode"] ?? "FACTUAL"
 
-            healthManager.makeSnapshot(from: start, to: end) { snapshot in
+            SnapshotBuilder.makeSnapshot(healthManager: healthManager, from: start, to: end) { snapshot in
                 Task {
                     var finalMeta = enrichedMeta
                     finalMeta["session_id"] = self.sessionId
@@ -419,8 +421,16 @@ class ChatViewModel: ObservableObject {
                 let leftYear = calendar.component(.year, from: leftStart)
                 let rightYear = calendar.component(.year, from: rightStart)
 
-                healthManager.makeYearSnapshot(year: leftYear) { leftSnapshot in
-                    self.healthManager.makeYearSnapshot(year: rightYear) { rightSnapshot in
+                SnapshotBuilder.makeYearSnapshot(
+                    healthManager: healthManager,
+                    year: leftYear
+                ) { leftSnapshot in
+
+                    SnapshotBuilder.makeYearSnapshot(
+                        healthManager: self.healthManager,
+                        year: rightYear
+                    ) { rightSnapshot in
+
 
                         Task {
                             var finalMeta = enrichedMeta
@@ -450,8 +460,8 @@ class ChatViewModel: ObservableObject {
             // ======================================================
             // 🔵 CAS SEMAINE / MOIS
             // ======================================================
-            healthManager.makeSnapshot(from: leftStart, to: leftEnd) { leftSnapshot in
-                self.healthManager.makeSnapshot(from: rightStart, to: rightEnd) { rightSnapshot in
+            SnapshotBuilder.makeSnapshot(healthManager: healthManager, from: leftStart, to: leftEnd) { leftSnapshot in
+                SnapshotBuilder.makeSnapshot(healthManager: self.healthManager, from: rightStart, to: rightEnd) { rightSnapshot in
 
                     Task {
                         var finalMeta = enrichedMeta
@@ -480,7 +490,7 @@ class ChatViewModel: ObservableObject {
     func debugRunnerSignature() {
 
         // 1️⃣ Construire la signature (52 semaines suffisent)
-        healthManager.makeWeeklySnapshots(weeks: 52) { signatureWeeks in
+        SnapshotBuilder.makeWeeklySnapshots(healthManager: healthManager, weeks: 52) { signatureWeeks in
 
             guard let signature = RunnerSignatureBuilder.build(from: signatureWeeks) else {
                 print("❌ SIGNATURE BUILD FAILED")
@@ -491,7 +501,7 @@ class ChatViewModel: ObservableObject {
             dump(signature)
 
             // 2️⃣ Récupérer les 104 semaines pour le dataset
-            self.healthManager.makeWeeklySnapshots(weeks: 104) { datasetWeeks in
+            SnapshotBuilder.makeWeeklySnapshots(healthManager: self.healthManager, weeks: 104) { datasetWeeks in
 
                 // 3️⃣ Export CSV enrichi
                 self.exportWeeksToCSV(datasetWeeks, signature: signature)

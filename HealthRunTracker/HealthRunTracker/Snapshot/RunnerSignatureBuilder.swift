@@ -189,3 +189,34 @@ final class RunnerSignatureBuilder {
         return maxBreak
     }
 }
+
+extension HealthManager {
+
+    func buildRunnerSignatureIfNeeded() {
+
+        guard runnerSignature == nil else {
+            print("🧠 Runner signature already built")
+            return
+        }
+
+        SnapshotBuilder.makeWeeklySnapshots(
+            healthManager: self,
+            weeks: 52
+        ) { weeklySnapshots in
+
+            print("🧪 BUILD SIGNATURE — weeks:", weeklySnapshots.count)
+
+            guard let signature =
+                RunnerSignatureBuilder.build(from: weeklySnapshots)
+            else {
+                print("❌ FAILED TO BUILD RUNNER SIGNATURE")
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.runnerSignature = signature
+                print("✅ RUNNER SIGNATURE STORED")
+            }
+        }
+    }
+}

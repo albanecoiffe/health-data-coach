@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainView: View {
-    @StateObject private var healthManager = HealthManager()
+    @EnvironmentObject var healthManager: HealthManager
     @State private var selectedView = 0
 
     var body: some View {
@@ -15,7 +15,7 @@ struct MainView: View {
             }
             .pickerStyle(.segmented)
             .padding()
-            
+
             Group {
                 if selectedView == 0 {
                     ContentView(healthManager: healthManager)
@@ -23,7 +23,7 @@ struct MainView: View {
                     ChatView(healthManager: healthManager)
                 } else if selectedView == 2 {
                     YearView(healthManager: healthManager)
-                }else {
+                } else {
                     RoutesMapView(healthManager: healthManager)
                 }
             }
@@ -33,8 +33,4 @@ struct MainView: View {
             healthManager.requestAuthorization()
         }
     }
-}
-
-#Preview {
-    MainView()
 }

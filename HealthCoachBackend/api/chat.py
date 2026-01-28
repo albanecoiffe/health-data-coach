@@ -10,9 +10,9 @@ from agents.summary_agent import summary_response
 from agents.factual_agent import factual_response
 from agents.questions_agent import analyze_question
 from services.intent_gatekeeper import intent_gatekeeper
-from services.snapshot.builder import build_snapshot_from_db
-from services.signature.builder import build_runner_signature
-from services.signature.service import get_or_build_signature
+
+from services.snapshot.store import get_snapshot_from_store
+from services.signature.store import get_signature_from_store
 
 from datetime import datetime
 from database import SessionLocal
@@ -50,72 +50,68 @@ router = APIRouter()
 def chat(req: ChatRequest):
     print("\n================= CHAT =================")
     print("📝 MESSAGE :", req.message)
-    print("📦 SNAPSHOT REÇU")
-    print("   Période :", req.snapshot.period.start, "→", req.snapshot.period.end)
+    print("📦 SNAPSHOT REÇU (transport)")
+
+    if req.snapshot:
+        print("   →", req.snapshot.period.start, "→", req.snapshot.period.end)
+
     print("🔥 snapshots =", req.snapshots)
     print("🔥 meta =", req.meta)
     print("🧪 META REÇU :", req.meta)
 
     session_id = req.meta.session_id if req.meta else None
 
+    # ======================================================
+    # 🧍 USER IDENTIFICATION (SOURCE OF TRUTH)
+    # ======================================================
+    if req.meta and req.meta.user_id:
+        user_uuid = UUID(req.meta.user_id)
+    elif DEFAULT_USER_ID:
+        user_uuid = DEFAULT_USER_ID
+    else:
+        raise HTTPException(status_code=400, detail="Missing user_id")
+
     # 🔴 MÉMOIRE — message utilisateur (CRITIQUE)
     if session_id:
         add_to_memory(session_id, "user", req.message)
 
     # ======================================================
-    # 🔁 BACKEND SNAPSHOT OVERRIDE (ÉTAPE 5.5)
+    # 🗄️ OUVERTURE DB (UNE SEULE FOIS)
     # ======================================================
-    if req.meta:
-        requested_start = req.meta.requested_start if req.meta else None
-        requested_end = req.meta.requested_end if req.meta else None
+    db = SessionLocal()
+    try:
+        # ======================================================
+        # 🔁 SNAPSHOT BACKEND
+        # ======================================================
+        if req.meta and req.meta.requested_start and req.meta.requested_end:
+            snapshot = get_snapshot_from_store(
+                db,
+                user_uuid,
+                req.meta.requested_start,
+                req.meta.requested_end,
+            )
 
-        # fallback: si Swift n'envoie pas user_id, on utilise le user par défaut
-        user_id_str = req.meta.user_id if req.meta else None
-        user_uuid = UUID(user_id_str) if user_id_str else DEFAULT_USER_ID
+            if snapshot:
+                req.snapshot = snapshot
 
-        if requested_start and requested_end:
-            print("🟠 BACKEND SNAPSHOT OVERRIDE (DB is source of truth)")
-
-            db = SessionLocal()
-            try:
-                backend_snapshot = build_snapshot_from_db(
-                    db=db,
-                    user_id=user_uuid,
-                    start=datetime.fromisoformat(requested_start),
-                    end=datetime.fromisoformat(requested_end),
-                )
-
-                # 🔥 ON ÉCRASE LE SNAPSHOT SWIFT
-                req.snapshot = backend_snapshot
-
+                print("📦 SNAPSHOT BACKEND UTILISÉ")
                 print(
-                    "✅ Snapshot backend utilisé :",
-                    backend_snapshot.period.start,
+                    "   →",
+                    req.snapshot.period.start,
                     "→",
-                    backend_snapshot.period.end,
-                    "|",
-                    backend_snapshot.totals.distance_km,
-                    "km",
+                    req.snapshot.period.end,
                 )
-            finally:
-                db.close()
 
-    # ======================================================
-    # 🧠 BACKEND SIGNATURE (SOURCE OF TRUTH)
-    # ======================================================
-    if session_id:
-        user_uuid = (
-            UUID(req.meta.user_id) if req.meta and req.meta.user_id else DEFAULT_USER_ID
-        )
+        # ======================================================
+        # 🧠 SIGNATURE BACKEND
+        # ======================================================
+        if session_id:
+            signature = get_signature_from_store(db, user_uuid)
+            if signature:
+                req.signature = signature
 
-        if not user_uuid:
-            raise HTTPException(status_code=400, detail="Missing user_id")
-
-        db = SessionLocal()
-        try:
-            req.signature = get_or_build_signature(db, user_uuid)
-        finally:
-            db.close()
+    finally:
+        db.close()
 
     # ======================================================
     # 🧠 SIGNATURE INGESTION
