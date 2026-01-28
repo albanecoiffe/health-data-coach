@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 from database import SessionLocal
-from schemas.snapshots import build_snapshot_from_db
-from schemas.snapshots import WeeklySnapshot
+from services.snapshot import build_snapshot_from_db
+from schemas.schemas import WeeklySnapshot
+from uuid import UUID
 
 router = APIRouter(prefix="/api")
 
@@ -19,7 +20,7 @@ def get_db():
 
 @router.get("/snapshot", response_model=WeeklySnapshot)
 def get_snapshot(
-    user_id: str,
+    user_id: UUID,
     start: datetime,
     end: datetime,
     db: Session = Depends(get_db),
