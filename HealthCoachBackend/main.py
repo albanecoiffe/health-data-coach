@@ -90,6 +90,8 @@ def ingest_run_session(
             z3_min=payload.z3_min,
             z4_min=payload.z4_min,
             z5_min=payload.z5_min,
+            elevation_m=payload.elevation_m,
+            active_kcal=payload.active_kcal,
         )
 
         db.add(session)

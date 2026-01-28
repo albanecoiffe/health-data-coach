@@ -185,7 +185,10 @@ class RunSessionCreate(BaseModel):
 
     distance_km: float
     duration_min: float
-    avg_hr: float | None = None
+    avg_hr: Optional[float] = None
+
+    elevation_m: Optional[float] = None
+    active_kcal: Optional[float] = None
 
     z1_min: float
     z2_min: float

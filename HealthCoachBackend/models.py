@@ -42,6 +42,9 @@ class RunSession(Base):
     duration_min = Column(Float)
     avg_hr = Column(Float)
 
+    elevation_m = Column(Float)
+    active_kcal = Column(Float)
+
     # -----------------------------
     # Temps par zone cardiaque (minutes)
     # -----------------------------

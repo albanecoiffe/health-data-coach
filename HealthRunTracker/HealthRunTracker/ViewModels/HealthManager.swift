@@ -46,6 +46,7 @@ struct SessionZoneBreakdown: Identifiable {
 
 final class HealthManager: ObservableObject {
     private let healthStore = HKHealthStore()
+    let backendUserId = "f90a87bf-2104-4456-8a54-b42c307337e7"
 
     @Published var weeklyData: [DailyRunData] = []
     @Published var runnerSignature: RunnerSignature? = nil
@@ -112,6 +113,7 @@ final class HealthManager: ObservableObject {
             HKObjectType.workoutType(),
             HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning)!,
             HKQuantityType.quantityType(forIdentifier: .heartRate)!,
+            HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!,
             HKSeriesType.workoutRoute()   // ROUTES GPS
         ]
 
@@ -606,7 +608,6 @@ extension HealthManager {
         healthStore.execute(query)
     }
 }
-
 // MARK: - Toutes les années + couleurs
 
 extension HealthManager {
@@ -1144,7 +1145,6 @@ extension HealthManager {
         ]
     }
 }
-
 // MARK: - SNAPSHOT ANNUEL (CHAT)
 
 extension HealthManager {
@@ -1298,14 +1298,35 @@ extension HealthManager {
         let startDate: Date
         let distanceKm: Double
         let durationMin: Double
-
-        // Temps en minutes par zone
+        let avgHR: Double?            // ✅
         let z1: Double
         let z2: Double
         let z3: Double
         let z4: Double
         let z5: Double
+        let elevationGainM: Double?
+        let activeKcal: Double?       // ✅
     }
+    
+    struct RunSessionPayload: Codable {
+        let user_id: String
+        let start_time: String
+
+        let distance_km: Double
+        let duration_min: Double
+        let avg_hr: Double?
+
+        let z1_min: Double
+        let z2_min: Double
+        let z3_min: Double
+        let z4_min: Double
+        let z5_min: Double
+
+        let elevation_m: Double?
+        let active_kcal: Double?
+    }
+
+
 
     // ======================================================
     // 🫀 ZONE CARDIAQUE POUR UN BPM
@@ -1385,11 +1406,93 @@ extension HealthManager {
 
         healthStore.execute(query)
     }
+    func computeAverageHeartRate(
+        for workout: HKWorkout,
+        completion: @escaping (Double?) -> Void
+    ) {
+        guard let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
+            completion(nil)
+            return
+        }
 
+        let predicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate,
+            end: workout.endDate,
+            options: .strictStartDate
+        )
 
-    // ======================================================
-    // 📥 FETCH DES SÉANCES BRUTES
-    // ======================================================
+        let query = HKSampleQuery(
+            sampleType: hrType,
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: nil
+        ) { _, samples, _ in
+
+            guard let samples = samples as? [HKQuantitySample],
+                  !samples.isEmpty else {
+                completion(nil)
+                return
+            }
+
+            let values = samples.map {
+                $0.quantity.doubleValue(for: HKUnit(from: "count/min"))
+            }
+
+            let avg = values.reduce(0, +) / Double(values.count)
+            completion(avg)
+        }
+
+        healthStore.execute(query)
+    }
+    
+    func resolveElevationGain(
+        for workout: HKWorkout,
+        completion: @escaping (Double) -> Void
+    ) {
+        // 1️⃣ Tentative directe via metadata Apple
+        if let elevation =
+            (workout.metadata?["HKElevationAscended"] as? HKQuantity)?
+                .doubleValue(for: .meter()) {
+
+            completion(elevation)
+            return
+        }
+
+        // 2️⃣ Fallback (aucune donnée fiable)
+        completion(0)
+    }
+    
+    func fetchActiveEnergy(
+        for workout: HKWorkout,
+        completion: @escaping (Double?) -> Void
+    ) {
+        guard let type = HKQuantityType.quantityType(
+            forIdentifier: .activeEnergyBurned
+        ) else {
+            completion(nil)
+            return
+        }
+
+        let predicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate,
+            end: workout.endDate,
+            options: .strictStartDate
+        )
+
+        let query = HKStatisticsQuery(
+            quantityType: type,
+            quantitySamplePredicate: predicate,
+            options: .cumulativeSum
+        ) { _, result, _ in
+            completion(
+                result?.sumQuantity()?.doubleValue(for: .kilocalorie())
+            )
+        }
+
+        healthStore.execute(query)
+    }
+
+    
     func fetchRunSessions(
         from start: Date,
         to end: Date,
@@ -1397,6 +1500,8 @@ extension HealthManager {
         completion: @escaping ([RunSession]) -> Void
     ) {
         print("🚨 fetchRunSessions called")
+        print("📅 period:", start, "→", end)
+
         let workoutPredicate = HKQuery.predicateForWorkouts(with: .running)
         let datePredicate = HKQuery.predicateForSamples(
             withStart: start,
@@ -1425,41 +1530,73 @@ extension HealthManager {
                 return
             }
 
+            print("🏃‍♂️ workouts found:", workouts.count)
+
             let group = DispatchGroup()
             var sessions: [RunSession] = []
 
             for workout in workouts {
                 group.enter()
 
-                self.fetchHeartRateZones(
-                    during: workout,
-                    maxHR: maxHR
-                ) { z1, z2, z3, z4, z5 in
+                // ============================
+                // 🔍 LOGS DE DIAGNOSTIC
+                // ============================
+                print("────────────────────────────")
+                print("📍 start:", workout.startDate)
+                print("⌚️ source:", workout.sourceRevision.source.name)
 
-                    let distanceKm =
-                        (workout.totalDistance?
-                            .doubleValue(for: .meter()) ?? 0) / 1000
+                let metadataKeys = workout.metadata?.keys.map { $0 } ?? []
+                print("📦 metadata keys:", metadataKeys)
 
-                    let durationMin = workout.duration / 60
+                let kcalStatExists =
+                    workout.statistics(
+                        for: HKQuantityType.quantityType(
+                            forIdentifier: .activeEnergyBurned
+                        )!
+                    ) != nil
+                print("🔥 kcal stat exists:", kcalStatExists)
+                // ============================
 
-                    sessions.append(
-                        RunSession(
-                            startDate: workout.startDate,
-                            distanceKm: distanceKm,
-                            durationMin: durationMin,
-                            z1: z1,
-                            z2: z2,
-                            z3: z3,
-                            z4: z4,
-                            z5: z5
-                        )
-                    )
+                self.fetchHeartRateZones(during: workout, maxHR: maxHR) { z1, z2, z3, z4, z5 in
+                    self.computeAverageHeartRate(for: workout) { avgHR in
+                        self.resolveElevationGain(for: workout) { elevationGain in
 
-                    group.leave()
+                            // 🔥 CALORIES (STAT WORKOUT — DEBUG)
+                            let activeEnergy =
+                                workout.statistics(
+                                    for: HKQuantityType.quantityType(
+                                        forIdentifier: .activeEnergyBurned
+                                    )!
+                                )?
+                                .sumQuantity()?
+                                .doubleValue(for: .kilocalorie())
+
+                            print("🔥 kcal value:", activeEnergy ?? -1)
+                            print("⛰ elevation value:", elevationGain)
+
+                            let distanceKm =
+                                (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000
+                            let durationMin = workout.duration / 60
+
+                            let session = RunSession(
+                                startDate: workout.startDate,
+                                distanceKm: distanceKm,
+                                durationMin: durationMin,
+                                avgHR: avgHR,
+                                z1: z1, z2: z2, z3: z3, z4: z4, z5: z5,
+                                elevationGainM: elevationGain,
+                                activeKcal: activeEnergy
+                            )
+
+                            sessions.append(session)
+                            group.leave()
+                        }
+                    }
                 }
             }
 
             group.notify(queue: .main) {
+                print("✅ fetchRunSessions completed:", sessions.count)
                 completion(
                     sessions.sorted { $0.startDate < $1.startDate }
                 )
@@ -1468,6 +1605,88 @@ extension HealthManager {
 
         healthStore.execute(query)
     }
+
+    func syncRunSessionsToBackend() {
+
+        let calendar = Calendar.current
+        let end = Date()
+        let start = calendar.date(byAdding: .month, value: -24, to: end)!
+
+        print("🔄 Sync HealthKit → Backend")
+
+        fetchRunSessions(from: start, to: end) { sessions in
+            print("📦 Sessions fetched:", sessions.count)
+
+            for s in sessions {
+                self.uploadRunSession(s)
+            }
+        }
+        
+        
+    }
+    // ======================================================
+    // Fonction to add neon database
+    // ======================================================
+
+    func uploadRunSession(_ session: RunSession) {
+
+        guard let url = URL(string: "\(baseURL)/api/run-session") else {
+            print("❌ Invalid backend URL")
+            return
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+
+        let payload = RunSessionPayload(
+            user_id: backendUserId,
+            start_time: formatter.string(from: session.startDate),
+            distance_km: session.distanceKm,
+            duration_min: session.durationMin,
+            avg_hr: session.avgHR,
+            z1_min: session.z1,
+            z2_min: session.z2,
+            z3_min: session.z3,
+            z4_min: session.z4,
+            z5_min: session.z5,
+            elevation_m: session.elevationGainM,
+            active_kcal: session.activeKcal
+        )
+
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            request.httpBody = try JSONEncoder().encode(payload)
+        } catch {
+            print("❌ JSON encode error:", error)
+            return
+        }
+
+        URLSession.shared.dataTask(with: request) { data, response, error in
+
+            if let error = error {
+                print("❌ Upload error:", error)
+                return
+            }
+
+            guard
+                let data = data,
+                let responseString = String(data: data, encoding: .utf8)
+            else {
+                print("⚠️ No response data")
+                return
+            }
+
+            print("✅ Backend response:", responseString)
+
+        }.resume()
+    }
+
+
+
 
     // ======================================================
     // 📄 EXPORT CSV (AVEC % CALCULÉS APRÈS)
@@ -1592,3 +1811,4 @@ extension HealthManager {
         }
     }
 }
+
