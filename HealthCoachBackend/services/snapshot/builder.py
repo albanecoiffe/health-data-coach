@@ -1,4 +1,4 @@
-from models.models import RunSession
+from models.RunSession import RunSession
 from schemas.schemas import (
     WeeklySnapshot,
     WeeklyTotals,

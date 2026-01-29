@@ -6,7 +6,7 @@ final class RunSessionSyncService {
     let userId: String
 
     init(baseURL: String, userId: String) {
-        self.baseURL = baseURL
+        self.baseURL = APIConfig.baseURL
         self.userId = userId
     }
 

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from models.models import RunSession
+from models.RunSession import RunSession
 from schemas.signature import (
     RunnerSignature,
     SignaturePeriod,

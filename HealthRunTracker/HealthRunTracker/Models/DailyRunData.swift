@@ -1,5 +1,7 @@
 import Foundation
 import HealthKit
+// A garder pour le moment car
+// j'affiche encore : liste de séances, graph hebdomadaire, vue “Semaine”, stats locales simples
 
 struct DailyRunData: Identifiable {
     let hkWorkout: HKWorkout

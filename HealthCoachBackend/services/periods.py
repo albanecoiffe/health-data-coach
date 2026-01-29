@@ -239,3 +239,14 @@ def snapshot_matches_period(snapshot, start: date, end: date) -> bool:
         snapshot.period.start == start.isoformat()
         and snapshot.period.end == end.isoformat()
     )
+
+
+from datetime import datetime, timedelta
+
+
+def get_current_week_interval():
+    now = datetime.utcnow()
+    start = now - timedelta(days=now.weekday())
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=7)
+    return start, end

@@ -18,14 +18,13 @@ final class HealthManager: ObservableObject {
     
     init(session: UserSession) {
         self.syncService = RunSessionSyncService(
-            baseURL: baseURL,
+            baseURL: APIConfig.baseURL,
             userId: session.userId
         )
     }
     
     // Published state
     @Published var weeklyData: [DailyRunData] = []
-    @Published var runnerSignature: RunnerSignature? = nil
     @Published var yearlyData: [MonthlyRunData] = []
     @Published var weeklyZoneBreakdown: [SessionZoneBreakdown] = []
 

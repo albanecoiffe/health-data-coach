@@ -21,8 +21,13 @@ from recommendation.engine import (
     compute_week_recommendation_from_csv,
 )
 
+from services.memory import add_to_memory, set_last_metric
+
 from services.comparisons import infer_period_context_from_keys
 from fastapi import HTTPException
+
+from sqlalchemy.orm import Session
+from uuid import UUID
 
 
 MONTHS = {
@@ -254,9 +259,19 @@ def apply_backend_overrides(message: str, decision: dict) -> dict:
     return decision
 
 
-def route_decision(req: ChatRequest, decision: dict):
-    meta = req.meta or {}
-    session_id = meta.session_id if meta else None
+from fastapi import HTTPException
+from datetime import datetime
+from uuid import UUID
+from sqlalchemy.orm import Session
+
+
+def route_decision(
+    decision: dict,
+    db: Session,
+    user_id: UUID,
+    message: str,
+    session_id: str | None = None,
+):
     metric = decision.get("metric", "DISTANCE")
 
     # ======================================================
@@ -266,84 +281,68 @@ def route_decision(req: ChatRequest, decision: dict):
         return build_compare_request(decision, metric)
 
     # ======================================================
-    # 🧠 RECOMMANDATION — PLANIFICATION DE LA SEMAINE
+    # 🧠 RECOMMANDATION
     # ======================================================
     if decision.get("type") == "RECOMMENDATION":
         recommendation = compute_week_recommendation_from_csv()
+        reply = recommendation_to_text(recommendation, session_id)
 
-        text = recommendation_to_text(recommendation, session_id)
+        if session_id:
+            add_to_memory(session_id, "assistant", reply)
 
         return {
             "type": "ANSWER_NOW",
-            "reply": text,
+            "reply": reply,
             "data": recommendation,
         }
+
     # ======================================================
-    # 🛑 ANSWER_NOW → réponse immédiate
+    # 🗨️ SMALL TALK / ANSWER_NOW SANS DONNÉES
     # ======================================================
     if decision.get("type") == "ANSWER_NOW":
-        answer_mode = decision.get("answer_mode", "FACTUAL")
+        reply = answer_small_talk(message, session_id)
 
-        print(f"🧭 ROUTING ANSWER_MODE = {answer_mode}")
+        if session_id:
+            add_to_memory(session_id, "assistant", reply)
 
-        if answer_mode == "SMALL_TALK":
-            return {
-                "type": "ANSWER_NOW",
-                "reply": answer_small_talk(req.message, session_id),
-            }
-
-        if answer_mode == "FACTUAL":
-            return {
-                "type": "ANSWER_NOW",
-                "reply": factual_response(req.snapshot, metric)["reply"],
-            }
-
-        if answer_mode == "COACHING":
-            return {
-                "type": "ANSWER_NOW",
-                "reply": answer_coaching(req.message, req.snapshot, session_id),
-            }
-
-        # fallback (small talk ou sécurité)
         return {
             "type": "ANSWER_NOW",
-            "reply": answer_with_snapshot(req.message, req.snapshot, session_id),
+            "reply": reply,
         }
 
     # ======================================================
-    # 📆 RÉSOLUTION PÉRIODE
+    # 📆 RÉSOLUTION DE LA PÉRIODE
     # ======================================================
-    decision_type = decision.get("type")
-    start, end = resolve_period_from_decision(decision, req.message)
+    start, end = resolve_period_from_decision(decision, message)
 
     if start is None or end is None:
         raise HTTPException(status_code=400, detail="Période invalide")
 
     # ======================================================
-    # ✅ SNAPSHOT MATCH → réponse directe
+    # 📊 RÉPONSE FACTUELLE (DB = SOURCE DE VÉRITÉ)
     # ======================================================
-    reply_mode = decision.get("reply_mode", "FACTUAL")
+    reply = factual_response(
+        db=db,
+        user_id=user_id,
+        start=start,
+        end=end,
+        metric=metric,
+    )
 
-    if reply_mode == "SUMMARY":
-        reply = summary_response(req.snapshot)["reply"]
-    else:
-        reply = factual_response(req.snapshot, metric)["reply"]
+    # ======================================================
+    # 🧠 MÉMOIRE & CONTEXTE
+    # ======================================================
+    if session_id:
+        add_to_memory(session_id, "assistant", reply)
+        set_last_metric(session_id, metric)
 
-    # ======================================================
-    # 📤 SNAPSHOT MANQUANT
-    # ======================================================
-    reply_mode = decision.get("reply_mode", "FACTUAL")
     return {
-        "type": "REQUEST_SNAPSHOT",
-        "period": {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-        },
+        "type": "ANSWER_NOW",
+        "reply": reply,
         "meta": {
             "metric": metric,
-            "reply_mode": reply_mode,
-            "requested_start": start.isoformat(),
-            "requested_end": end.isoformat(),
+            "start": start.isoformat(),
+            "end": end.isoformat(),
         },
     }
 

@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from database import SessionLocal
-from models.models import RunSession
+from models.RunSession import RunSession
 from schemas.schemas import RunSessionCreate
 from services.snapshot.builder import build_snapshot_from_db
 

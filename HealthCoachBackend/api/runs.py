@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.models import RunSession
+from models.RunSession import RunSession
 from schemas.schemas import RunSessionCreate
 
 router = APIRouter(prefix="/api")

@@ -49,7 +49,7 @@ struct RunSessionDebugTools {
             return
         }
 
-        guard let url = URL(string: "\(baseURL)/upload-sessions-csv") else {
+        guard let url = URL(string: "\(APIConfig.baseURL)/upload-sessions-csv") else {
             print("❌ URL backend invalide")
             return
         }

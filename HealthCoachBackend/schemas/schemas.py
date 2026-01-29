@@ -82,10 +82,7 @@ class SnapshotBatchPayload(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
-    snapshot: Snapshot
-    snapshots: Optional[SnapshotBatchPayload] = None
-    meta: Optional[ChatMeta] = None
-    signature: Optional[RunnerSignature] = None
+    meta: Optional[dict] = None
 
 
 # ======================================================

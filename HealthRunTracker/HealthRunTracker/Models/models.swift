@@ -2,11 +2,12 @@ import MapKit
 import HealthKit
 import SwiftUI
 
+// utilisé pour la carte, purement UI
 final class YearPolyline: MKPolyline {
     var year: Int = 0
 }
 
-// MARK: - Types publics
+// bar chart des zones HR
 struct HeartRateZoneData: Identifiable {
     let id = UUID()
     let label: String      // Z1, Z2, Z3...
@@ -14,6 +15,7 @@ struct HeartRateZoneData: Identifiable {
     let color: Color       // pour le graphique
 }
 
+// graph semaine
 struct WeeklyDistanceData: Identifiable, Equatable {
     var id: Int { weekNumber }
     let weekNumber: Int
@@ -41,6 +43,7 @@ struct SessionZoneBreakdown: Identifiable {
     let z5: Double
 }
 
+// vue Année locale
 struct MonthlyRunData: Identifiable {
     let id = UUID()
     let month: Int
@@ -50,6 +53,7 @@ struct MonthlyRunData: Identifiable {
     let monthLabel: String
 }
 
+// records, vue année
 struct RunRecord {
     let distanceTarget: Double     // en km (10, 21.1, 42.195)
     let bestTime: TimeInterval     // en secondes
