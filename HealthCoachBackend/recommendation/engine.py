@@ -91,204 +91,50 @@ SESSION_PROFILES = {
     },
 }
 
-
-# ------------------------------------------------------------
-# MAIN ENTRY POINT
-# ------------------------------------------------------------
-
-
-def compute_week_recommendation_from_csv(
-    weeks_path: str = "weeks_received.csv",
-    sessions_path: str = "sessions_received.csv",
-) -> WeekRecommendation:
-    # --------------------------------------------------------
-    # 1. LOAD DATA
-    # --------------------------------------------------------
-
-    weeks = load_weeks()
-    sessions = load_sessions()
-
-    # --------------------------------------------------------
-    # 2. CLUSTER WEEKS
-    # --------------------------------------------------------
-
-    weeks_clustered = cluster_weeks(weeks)
-
-    # --------------------------------------------------------
-    # 3. CLUSTER SESSIONS
-    # --------------------------------------------------------
-
-    sessions_clustered = cluster_sessions(sessions)
-
-    # --------------------------------------------------------
-    # 4. SESSION DISTRIBUTION PER WEEK CLUSTER
-    # --------------------------------------------------------
-
-    distribution = _compute_session_distribution(sessions_clustered, weeks_clustered)
-
-    # --------------------------------------------------------
-    # 5. RISK SCORE (via risk.py)
-    # --------------------------------------------------------
-
-    risk_df = compute_weekly_risk(weeks_clustered)
-
-    # --------------------------------------------------------
-    # 6. CONTEXTE TEMPOREL — SEMAINE COURANTE
-    # --------------------------------------------------------
-
-    today = pd.Timestamp.today().normalize()
-    current_week_start = today - pd.to_timedelta(today.weekday(), unit="D")
-
-    # Par défaut, la semaine courante n'est PAS encore comptée
-    completed_weeks = weeks_clustered[
-        weeks_clustered["week_start"] < current_week_start
-    ]
-
-    last_3w = completed_weeks.tail(3)
-
-    dominant_cluster = int(last_3w["cluster_week"].mode()[0])
-    avg_sessions = int(np.clip(round(last_3w["sessions"].mean()), 2, 5))
-
-    avg_risk = risk_df[risk_df["week_start"].isin(last_3w["week_start"])][
-        "risk_proba"
-    ].mean()
-
-    risk_level = risk_level_from_proba(avg_risk)
-
-    # Logs explicites — semaines utilisées
-    print("\n📈 Weekly stats used for risk computation:")
-    print(last_3w[["week_start"] + FEATURES_WEEK].to_string(index=False))
-
-    print("📈 Avg risk proba (last 3w):", round(float(avg_risk), 3))
-
-    # --------------------------------------------------------
-    # 7. BUILD PLAN (semaine courante)
-    # --------------------------------------------------------
-
-    base_plan = _build_week_template(dominant_cluster, avg_sessions, distribution)
-    base_plan = _adjust_plan_by_risk(base_plan, avg_risk)
-
-    current_sessions = sessions_clustered[
-        sessions_clustered["week_start"] == current_week_start
-    ]
-
-    done_types = current_sessions["cluster_session"].map(SESSION_LABELS).tolist()
-    done_sessions_summary = summarize_done_sessions(current_sessions)
-
-    remaining_sessions = max(0, avg_sessions - len(done_types))
-
-    final_plan = _adjust_with_done_sessions(
-        base_plan,
-        done_types,
-        remaining_sessions,
-    )
-
-    enriched_remaining_plan = enrich_plan_with_descriptions(final_plan)
-
-    # --------------------------------------------------------
-    # 8. DÉTECTION — SEMAINE COMPLÈTE ?
-    # --------------------------------------------------------
-
-    week_complete = len(enriched_remaining_plan) == 0
-
-    # --------------------------------------------------------
-    # 9. 🔄 SI SEMAINE COMPLÈTE → PLANIFIER SEMAINE SUIVANTE
-    # --------------------------------------------------------
-
-    if week_complete:
-        print("\n🔄 SEMAINE COMPLÈTE → PLANIFICATION SEMAINE SUIVANTE")
-
-        # 👉 la semaine courante devient historique
-        completed_weeks = weeks_clustered[
-            weeks_clustered["week_start"] <= current_week_start
-        ]
-
-        last_3w = completed_weeks.tail(3)
-
-        dominant_cluster = int(last_3w["cluster_week"].mode()[0])
-        avg_sessions = int(np.clip(round(last_3w["sessions"].mean()), 2, 5))
-
-        avg_risk = risk_df[risk_df["week_start"].isin(last_3w["week_start"])][
-            "risk_proba"
-        ].mean()
-
-        risk_level = risk_level_from_proba(avg_risk)
-
-        print("\n📈 Weekly stats used for NEXT WEEK risk computation:")
-        print(last_3w[["week_start"] + FEATURES_WEEK].to_string(index=False))
-        print("📈 Avg risk proba (next week):", round(float(avg_risk), 3))
-
-        # Nouvelle semaine vierge
-        done_types = []
-        done_sessions_summary = []
-
-        base_plan = _build_week_template(dominant_cluster, avg_sessions, distribution)
-        base_plan = _adjust_plan_by_risk(base_plan, avg_risk)
-
-        final_plan = base_plan
-        enriched_remaining_plan = enrich_plan_with_descriptions(final_plan)
-
-    # --------------------------------------------------------
-    # 10. DEBUG FINAL
-    # --------------------------------------------------------
-
-    print("\n================ DEBUG RECOMMENDATION ================")
-    print("📅 Current week start:", current_week_start)
-    print("🧠 Dominant cluster:", dominant_cluster)
-    print("🎯 Target sessions:", avg_sessions)
-    print("⚠️ Risk level:", risk_level)
-    print("📈 Avg risk last 3w:", round(float(avg_risk), 3))
-    print("✅ Week complete:", week_complete)
-    print("🏷️ Done types:", done_types)
-    print("🗓️ Remaining sessions:", enriched_remaining_plan)
-
-    # --------------------------------------------------------
-    # 11. OUTPUT
-    # --------------------------------------------------------
-
-    last_week = completed_weeks.iloc[-1]
-
-    previous_week_summary = {
-        "sessions": int(last_week["sessions"]),
-        "distance_km": round(float(last_week["distance_km"]), 1),
-    }
-
-    return {
-        "target_sessions": avg_sessions,
-        "dominant_week_cluster": dominant_cluster,
-        "avg_risk_last_3w": round(float(avg_risk), 3),
-        "risk_level": risk_level,
-        "base_plan": base_plan,
-        "adjusted_plan_remaining": final_plan,
-        "done_sessions": done_types,
-        "remaining_sessions": enriched_remaining_plan,
-        "done_sessions_details": done_sessions_summary,
-        "week_complete": week_complete,
-        "previous_week_had_sessions": len(done_sessions_summary) > 0,
-        "previous_week_summary": previous_week_summary,
-    }
-
-
+SESSION_TEMPLATES = {
+    # cluster_week -> ordered pattern
+    0: ["intensity", "endurance", "easy", "easy", "easy"],
+    1: ["intensity", "easy", "endurance", "easy"],
+    2: ["easy", "endurance", "easy"],
+}
 # ------------------------------------------------------------
 # INTERNAL HELPERS (unchanged)
 # ------------------------------------------------------------
 
 
-def summarize_done_sessions(current_sessions: pd.DataFrame) -> list[dict]:
-    summaries = []
+# recommendation/engine.py
 
-    for _, row in current_sessions.iterrows():
-        summaries.append(
-            {
-                "type": SESSION_LABELS[row["cluster_session"]],
-                "duration_min": round(row["duration_min"], 1),
-                "distance_km": round(row["distance_km"], 1),
-                "low_intensity_pct": round(row["low_intensity_pct"], 2),
-                "high_intensity_pct": round(row["high_intensity_pct"], 2),
-            }
-        )
 
-    return summaries
+def summarize_done_sessions(current_sessions: list[dict]) -> dict:
+    """
+    Summarize already completed sessions in the current week.
+    DB-native version (list of dicts).
+    """
+
+    summary = {
+        "count": 0,
+        "types": {},
+        "total_duration_min": 0.0,
+        "total_distance_km": 0.0,
+    }
+
+    for s in current_sessions:
+        summary["count"] += 1
+
+        duration = float(s.get("duration_min") or 0.0)
+        distance = float(s.get("distance_km") or 0.0)
+
+        summary["total_duration_min"] += duration
+        summary["total_distance_km"] += distance
+
+        session_type = s.get("cluster_session")
+        if session_type is not None:
+            summary["types"][session_type] = summary["types"].get(session_type, 0) + 1
+
+    summary["total_duration_min"] = round(summary["total_duration_min"], 1)
+    summary["total_distance_km"] = round(summary["total_distance_km"], 1)
+
+    return summary
 
 
 def _compute_session_distribution(sessions, weeks):
@@ -346,21 +192,23 @@ def _compute_risk_scores(df):
     return df
 
 
-def _build_week_template(cluster_week, avg_sessions, dist_df):
-    rows = dist_df[dist_df["cluster_week"] == cluster_week]
+def _build_week_template(
+    cluster_week: int, avg_sessions: int, dist_df=None
+) -> list[str]:
+    """
+    DB-native week template builder.
+    dist_df kept for backward compatibility but ignored.
+    """
+    # fallback safe
+    pattern = SESSION_TEMPLATES.get(int(cluster_week), ["easy", "endurance", "easy"])
+
     plan = []
-
-    for _, row in rows.iterrows():
-        plan += [SESSION_LABELS[row["cluster_session"]]] * round(
-            row["pct"] * avg_sessions
-        )
-
+    i = 0
     while len(plan) < avg_sessions:
-        plan.append("easy")
-    while len(plan) > avg_sessions:
-        plan.pop()
+        plan.append(pattern[i % len(pattern)])
+        i += 1
 
-    return plan
+    return plan[:avg_sessions]
 
 
 def _adjust_plan_by_risk(plan, avg_risk):
@@ -371,27 +219,28 @@ def _adjust_plan_by_risk(plan, avg_risk):
     return plan
 
 
-def _adjust_with_done_sessions(plan, done_types, remaining_sessions):
-    print("\n🛠️ DEBUG _adjust_with_done_sessions")
-    print("Plan initial :", plan)
-    print("Séances déjà faites :", done_types)
-    print("Nombre de séances restantes :", remaining_sessions)
+def _adjust_with_done_sessions(
+    base_plan: list[str],
+    done_types: list[str],
+    remaining_sessions_count: int,
+) -> list[str]:
+    """
+    Remove already completed session types from the base plan when possible,
+    then keep only the number of remaining sessions.
+    """
+    plan_copy = base_plan.copy()
 
-    plan_copy = plan.copy()
-
+    # Remove done sessions if present in plan
     for done in done_types:
         if done in plan_copy:
-            print(f"➡️ Suppression de : {done}")
             plan_copy.remove(done)
-        else:
-            print(f"⚠️ {done} non trouvé dans le plan")
 
-    adjusted = plan_copy[:remaining_sessions]
+    adjusted = plan_copy[:remaining_sessions_count]
 
-    while len(adjusted) < remaining_sessions:
+    # pad with easy if needed
+    while len(adjusted) < remaining_sessions_count:
         adjusted.append("easy")
 
-    print("Plan final ajusté :", adjusted)
     return adjusted
 
 

@@ -23,12 +23,18 @@ from intent_based_querying.verbalization.verbalizer import (
     verbalize_period_summary_llm,
     verbalize_small_talk_llm,
     verbalize_coaching_llm,
+    verbalize_recommendation_llm,
+)
+from intent_based_querying.execution.execute_recommendation import (
+    execute_recommendation,
 )
 
 
 def route_intent(db, user_id, intent: dict):
     print("\n🧭 ROUTER")
     print("➡️ Intent type :", intent.get("intent"))
+
+    session_id: UUID | None = intent.get("session_id")
 
     intent = normalize_metric_from_message(intent)
 
@@ -134,6 +140,20 @@ def route_intent(db, user_id, intent: dict):
                 "coaching_type": result["coaching_type"],
                 "facts": result["facts"],
             },
+        }
+
+    # =====================================================
+    if intent["intent"] == "RECOMMENDATION":
+        reco = execute_recommendation(db, user_id)
+        reply = verbalize_recommendation_llm(
+            recommendation=reco,
+            session_id=session_id,
+        )
+
+        return {
+            "type": "ANSWER_NOW",
+            "reply": reply,
+            "data": reco,
         }
 
     # =====================================================

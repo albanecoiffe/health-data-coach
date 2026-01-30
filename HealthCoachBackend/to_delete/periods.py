@@ -166,27 +166,6 @@ def format_period_for_display(start_iso: str, end_iso: str) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-def normalize(text: str) -> str:
-    text = text.lower()
-
-    # Normalisation Unicode (séparation accents)
-    text = unicodedata.normalize("NFD", text)
-
-    # Suppression des accents
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-
-    # Normalisation des apostrophes et guillemets
-    text = text.replace("’", "'")
-    text = text.replace("‘", "'")
-    text = text.replace("`", "'")
-    text = text.replace("´", "'")
-
-    # Optionnel mais recommandé : tirets typographiques → tiret simple
-    text = text.replace("–", "-").replace("—", "-")
-
-    return text
-
-
 def normalize_lemma(lemma: str) -> str:
     # féminin / pluriel simples
     if lemma.endswith("e"):
@@ -194,12 +173,6 @@ def normalize_lemma(lemma: str) -> str:
     if lemma.endswith("s"):
         lemma = lemma[:-1]
     return lemma
-
-
-def lemmatize(text: str) -> list[str]:
-    # suppression de toute ponctuation
-    text = re.sub(r"[^\w\s]", " ", text)
-    return [_stemmer.stem(w) for w in text.split() if len(w) > 2]
 
 
 def snapshot_matches_iso(snapshot, start_iso: str, end_iso: str) -> bool:

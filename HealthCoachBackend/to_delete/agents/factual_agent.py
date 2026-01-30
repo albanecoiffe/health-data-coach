@@ -1,9 +1,9 @@
-from services.periods import format_period_for_display
+from to_delete.periods import format_period_for_display
 from datetime import date
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from services.periods import format_period_for_display
+from to_delete.periods import format_period_for_display
 from metrics.aggregates import get_aggregated_totals
 
 

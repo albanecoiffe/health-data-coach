@@ -13,6 +13,7 @@ Allowed intents:
 - COMPARE_PERIODS
 - PERIOD_SUMMARY
 - COACHING
+- RECOMMENDATION
 - SMALL_TALK
 
 Allowed metrics:

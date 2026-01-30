@@ -1,29 +1,27 @@
-from services.periods import normalize
+from intent_based_querying.normalization.normalizer import normalize
 import re
 from datetime import date, timedelta
 import calendar
 
-from agents.factual_agent import factual_response
-from agents.factual_agent import factual_response
-from agents.snapshot_agent import answer_with_snapshot
-from agents.small_talks_agent import answer_small_talk
-from agents.questions_agent import analyze_question
-from agents.summary_agent import summary_response
-from agents.recommendation_agent import recommendation_to_text
-from agents.coaching_agent import answer_coaching
+from to_delete.agents.factual_agent import factual_response
+from to_delete.agents.factual_agent import factual_response
+from to_delete.agents.snapshot_agent import answer_with_snapshot
+from to_delete.agents.small_talks_agent import answer_small_talk
+from to_delete.agents.questions_agent import analyze_question
+from to_delete.agents.summary_agent import summary_response
+from to_delete.agents.recommendation_agent import recommendation_to_text
+from to_delete.agents.coaching_agent import answer_coaching
 from schemas.schemas import ChatRequest
-from services.periods import (
+from to_delete.periods import (
     period_to_dates,
     extract_year,
     resolve_period_from_decision,
 )
-from recommendation.engine import (
-    compute_week_recommendation_from_csv,
-)
+
 
 from services.memory import add_to_memory, set_last_metric
 
-from services.comparisons import infer_period_context_from_keys
+from to_delete.comparisons import infer_period_context_from_keys
 from fastapi import HTTPException
 
 from sqlalchemy.orm import Session
@@ -279,22 +277,6 @@ def route_decision(
     # ======================================================
     if decision.get("type") == "COMPARE_PERIODS":
         return build_compare_request(decision, metric)
-
-    # ======================================================
-    # 🧠 RECOMMANDATION
-    # ======================================================
-    if decision.get("type") == "RECOMMENDATION":
-        recommendation = compute_week_recommendation_from_csv()
-        reply = recommendation_to_text(recommendation, session_id)
-
-        if session_id:
-            add_to_memory(session_id, "assistant", reply)
-
-        return {
-            "type": "ANSWER_NOW",
-            "reply": reply,
-            "data": recommendation,
-        }
 
     # ======================================================
     # 🗨️ SMALL TALK / ANSWER_NOW SANS DONNÉES

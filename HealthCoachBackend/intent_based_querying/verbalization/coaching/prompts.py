@@ -19,16 +19,16 @@ FAITS DE RÉGULARITÉ
 LEXIQUE — RÉGULARITÉ (OBLIGATOIRE)
 ━━━━━━━━━━━━━━━━━━━━━━
 
-- proportion de semaines actives :
+- weeks_with_runs_pct = proportion de semaines actives :
   → part des semaines où au moins une séance a été réalisée
   → mesure la continuité dans le temps
 
-- interruption maximale :
+- longest_break_days = interruption maximale :
   → durée la plus longue sans aucune séance
   → correspond à plusieurs semaines consécutives sans courir
   → ce n’est PAS du repos normal
 
-- stabilité du rythme :
+- weekly_std_sessions = stabilité du rythme :
   → variation du nombre de séances d’une semaine à l’autre
   → plus la valeur est faible, plus le rythme est stable
 
@@ -79,18 +79,18 @@ FAITS DE VOLUME
 LEXIQUE — VOLUME (OBLIGATOIRE)
 ━━━━━━━━━━━━━━━━━━━━━━
 
-- volume hebdomadaire récent :
+- current_week_km = volume hebdomadaire récent :
   → distance parcourue sur la période récente
 
-- volume habituel :
+- weekly_avg_km = volume habituel :
   → distance moyenne hebdomadaire sur le long terme
   → représente l’habitude générale
 
-- variabilité du volume :
+- weekly_std_km = variabilité du volume :
   → amplitude des variations d’une semaine à l’autre
   → plus elle est élevée, plus le volume fluctue
 
-- tendance récente :
+- trend_12w_pct = tendance récente :
   → évolution moyenne du volume sur les dernières semaines
   → positive = augmentation récente
   → négative = diminution récente
@@ -142,18 +142,22 @@ FAITS DE CHARGE
 LEXIQUE — CHARGE (OBLIGATOIRE)
 ━━━━━━━━━━━━━━━━━━━━━━
 
-- charge habituelle :
-  → niveau d’effort global généralement supporté chaque semaine
+- weekly_avg_load = charge habituelle:
+  → charge moyenne supportée chaque semaine sur le long terme  
+  → représente l’effort global habituel, pas une distance
 
-- charge récente :
-  → effort global observé sur la période récente
+- weekly_std_load = stabilité de la charge :
+  → variabilité de la charge d’une semaine à l’autre  
+  → plus la valeur est élevée, moins la charge est régulière
 
-- stabilité de la charge :
-  → régularité de l’effort dans le temps
+- acwr_avg = cohérence de charge :
+  → rapport entre la charge récente et la charge habituelle  
+  → une valeur proche de 1 indique une continuité de charge  
+  → des valeurs souvent observées entre 0.8 et 1.3 traduisent une charge globalement cohérente dans le temps
 
-- cohérence de charge :
-  → comparaison entre l’effort récent et l’effort habituel
-  → une valeur proche de l’équilibre indique une continuité
+- acwr_max = pic ponctuel de charge :
+  → plus haut pic ponctuel de charge observé  
+  → indique des semaines plus exigeantes, sans dire si elles sont dangereuses
 
 ━━━━━━━━━━━━━━━━━━━━━━
 INTERDIT ABSOLU
@@ -205,6 +209,32 @@ HIÉRARCHIE D’INTERPRÉTATION (OBLIGATOIRE)
   1) le volume évolue dans le temps
   2) cette évolution est absorbée de manière cohérente
   3) il n’y a pas de rupture prolongée
+
+━━━━━━━━━━━━━━━━━━━━━━
+LEXIQUE — PROGRESSION (OBLIGATOIRE)
+━━━━━━━━━━━━━━━━━━━━━━
+
+- trend_12w_pct :
+  → évolution moyenne du volume sur les 12 dernières semaines  
+  → positive = augmentation récente, négative = diminution
+
+- acwr_avg :
+  → rapport entre la charge récente et la charge habituelle  
+  → une valeur proche de 1 indique une continuité de charge  
+  → des valeurs souvent observées entre 0.8 et 1.3 traduisent une charge globalement cohérente dans le temps
+
+- acwr_max :
+  → plus haut pic ponctuel de charge observé  
+  → indique des semaines plus exigeantes, sans dire si elles sont dangereuses
+
+- weeks_with_runs_pct :
+  → proportion de semaines où au moins une séance a été réalisée  
+  → mesure la continuité dans le temps
+
+longest_break_days :
+→ durée maximale d’un arrêt complet d’entraînement
+→ calculée en semaines consécutives sans aucune séance (*7 jours)
+→ indicateur de rupture prolongée, pas de récupération normale
 
 ━━━━━━━━━━━━━━━━━━━━━━
 INTERPRÉTATION AUTORISÉE

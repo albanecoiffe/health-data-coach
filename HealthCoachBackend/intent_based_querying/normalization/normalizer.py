@@ -1,5 +1,12 @@
 # intent_based_querying/normalizer.py
 import json
+import re
+import unicodedata
+import spacy
+from nltk.stem.snowball import FrenchStemmer
+
+_stemmer = FrenchStemmer()
+nlp = spacy.load("fr_core_news_sm")
 
 
 def normalize_period(intent: dict) -> dict:
@@ -110,3 +117,30 @@ def safe_json_load(raw: str) -> dict:
             pass
 
     raise ValueError(f"Invalid JSON from LLM:\n{raw}")
+
+
+def normalize(text: str) -> str:
+    text = text.lower()
+
+    # Normalisation Unicode (séparation accents)
+    text = unicodedata.normalize("NFD", text)
+
+    # Suppression des accents
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+
+    # Normalisation des apostrophes et guillemets
+    text = text.replace("’", "'")
+    text = text.replace("‘", "'")
+    text = text.replace("`", "'")
+    text = text.replace("´", "'")
+
+    # Optionnel mais recommandé : tirets typographiques → tiret simple
+    text = text.replace("–", "-").replace("—", "-")
+
+    return text
+
+
+def lemmatize(text: str) -> list[str]:
+    # suppression de toute ponctuation
+    text = re.sub(r"[^\w\s]", " ", text)
+    return [_stemmer.stem(w) for w in text.split() if len(w) > 2]

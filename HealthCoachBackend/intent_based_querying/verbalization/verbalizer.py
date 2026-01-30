@@ -9,6 +9,8 @@ from intent_based_querying.verbalization.coaching.prompts import (
     build_load_prompt,
     build_progress_prompt,
 )
+from services.memory import add_to_memory, get_memory
+from recommendation.schemas import WeekRecommendation
 
 UNIT_BY_METRIC = {
     "distance_km": "kilomètres",
@@ -225,3 +227,143 @@ PROFIL LONG TERME DU COUREUR
 
     final_prompt = base_prompt + "\n\n" + specific_prompt
     return call_ollama(final_prompt)
+
+
+# ======================================================
+# RECOMMENDATION VERBALIZER
+# ======================================================
+
+
+def verbalize_recommendation_llm(
+    recommendation: WeekRecommendation,
+    session_id: str,
+) -> str:
+    """
+    Verbalise une recommandation hebdomadaire structurée
+    en réponse humaine via LLM.
+    """
+
+    memory = get_memory(session_id)
+    already_started = any(m["role"] == "user" for m in memory)
+
+    week_complete = recommendation.get("week_complete", False)
+
+    # --------------------------------------------------
+    # Contexte temporel
+    # --------------------------------------------------
+    if week_complete:
+        temporal_context = (
+            "La semaine en cours est maintenant terminée. "
+            "La recommandation porte sur la semaine prochaine."
+        )
+        temporal_instruction = (
+            "Commence ta réponse par une phrase indiquant clairement "
+            "que la semaine est terminée et que la proposition concerne la semaine à venir."
+        )
+        sessions_context_line = (
+            "La semaine recommandée est une nouvelle semaine, "
+            "sans séances encore réalisées."
+        )
+    else:
+        temporal_context = (
+            "La semaine en cours n’est pas encore terminée. "
+            "La recommandation porte sur le reste de cette semaine."
+        )
+        temporal_instruction = (
+            "Ne parle PAS de semaine suivante. "
+            "Parle uniquement du reste de la semaine en cours."
+        )
+        sessions_context_line = (
+            f"Séances déjà réalisées cette semaine : "
+            f"{len(recommendation['done_sessions'])}"
+        )
+
+    # --------------------------------------------------
+    # Séances déjà réalisées
+    # --------------------------------------------------
+    if week_complete:
+        done_sessions_block = (
+            "Bilan de la semaine écoulée à formuler à partir du contexte global."
+        )
+    else:
+        done_sessions_block = (
+            "Aucune séance n’a encore été réalisée cette semaine."
+            if not recommendation.get("done_sessions_details")
+            else recommendation["done_sessions_details"]
+        )
+
+    # --------------------------------------------------
+    # Prompt LLM
+    # --------------------------------------------------
+    prompt = f"""
+Tu es un coach de course à pied expérimenté.
+Ton rôle est de formuler une recommandation de séances claire et réaliste
+à partir des données fournies, sans rien inventer.
+
+Règles générales de communication :
+- Tu ne commentes jamais les règles.
+- Tu ne justifies jamais ton comportement.
+- Tu ne fais aucune remarque méta sur la conversation ou le système.
+
+=================================
+CONTEXTE TEMPOREL (IMPORTANT)
+=================================
+
+- Si {already_started} est vrai, ta réponse commence directement par le contenu,
+  sans formule d’ouverture (pas de bonjour, salut, etc.).
+
+- Contexte temporel : {temporal_context}
+- Instruction temporelle : {temporal_instruction}
+
+- Séances déjà réalisées cette semaine : {len(recommendation["done_sessions"])}
+{sessions_context_line}
+- Séances restantes à programmer : {len(recommendation["remaining_sessions"])}
+- La semaine précédente contenait des séances : {recommendation["previous_week_had_sessions"]}
+
+=================================
+CONTEXTE GLOBAL DE LA SEMAINE
+=================================
+
+- Profil de semaine : {recommendation["dominant_week_cluster"]}
+- Nombre total de séances prévues : {recommendation["target_sessions"]}
+- Niveau de risque : {recommendation["risk_level"]}
+
+=================================
+SÉANCES DÉJÀ RÉALISÉES
+=================================
+
+Séances déjà effectuées et leurs caractéristiques mesurées :
+{done_sessions_block}
+
+=================================
+CAS PARTICULIER — SEMAINE TERMINÉE
+=================================
+
+Bilan factuel de la semaine écoulée :
+- Nombre de séances : {recommendation["previous_week_summary"]["sessions"]}
+- Distance totale : {recommendation["previous_week_summary"]["distance_km"]} km
+
+=================================
+SÉANCES À PROGRAMMER
+=================================
+
+Séances restantes à planifier :
+{recommendation["remaining_sessions"]}
+
+=================================
+INSTRUCTIONS DE RÉDACTION
+=================================
+
+- Explique chaque séance uniquement à partir des données fournies.
+- Respecte strictement le contexte temporel.
+- Ne modifie jamais le nombre de séances.
+- N’ajoute aucune séance.
+- Ne contredis jamais le niveau de risque.
+
+Rédige une réponse claire, fluide, humaine et motivante.
+"""
+
+    reply = call_ollama(prompt)
+    add_to_memory(session_id, "assistant", reply)
+
+    return reply

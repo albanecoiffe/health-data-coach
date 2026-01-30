@@ -4,6 +4,8 @@
 
 import pandas as pd
 import joblib
+import numpy as np
+from typing import List, Dict
 
 # ------------------------------------------------------------
 # CONFIG
@@ -40,67 +42,96 @@ kmeans_week = joblib.load("recommendation/models/kmeans3_week.joblib")
 # ------------------------------------------------------------
 
 
-def cluster_weeks(
-    weeks_df: pd.DataFrame,
-    n_clusters: int = 3,
-    random_state: int = 42,
-) -> pd.DataFrame:
+# ------------------------------------------------------------
+# WEEK CLUSTERING
+# ------------------------------------------------------------
+def cluster_weeks(run_weeks) -> int | None:
     """
-    Cluster training weeks into profiles (e.g. controlled, intensive, short).
-
-    Parameters
-    ----------
-    weeks_df : pd.DataFrame
-        Weekly aggregated training data.
-    n_clusters : int
-        Number of clusters (default = 3).
-    random_state : int
-        Random state for reproducibility.
-
-    Returns
-    -------
-    pd.DataFrame
-        weeks_df enriched with 'cluster_week'.
+    Return dominant week cluster over provided RunWeek objects.
     """
+    if not run_weeks:
+        return None
 
-    df = weeks_df.dropna(subset=FEATURES_WEEK).copy()
+    feature_names = list(scaler_week.feature_names_in_)
 
-    X = df[scaler_week.feature_names_in_]
+    rows = []
+    for w in run_weeks:
+        rows.append(
+            {
+                "distance_km": float(w.total_distance_km or 0.0),
+                "sessions": int(w.sessions_count or 0),
+                "duration_min": float(w.total_duration_min or 0.0),
+                "weekly_load": float(w.avg_load or 0.0),
+                "low_intensity_pct": float(w.z1_z3_pct or 0.0),
+                "high_intensity_pct": float(w.z4_z5_pct or 0.0),
+            }
+        )
+
+    df = pd.DataFrame(rows)
+
+    if df.empty:
+        return None
+
+    # 🔒 strict ML alignment
+    X = df[feature_names]
+
     X_scaled = scaler_week.transform(X)
+    labels = kmeans_week.predict(X_scaled)
 
-    df["cluster_week"] = kmeans_week.predict(X_scaled)
-
-    return df
+    return int(np.bincount(labels).argmax())
 
 
-def cluster_sessions(
-    sessions_df: pd.DataFrame,
-    n_clusters: int = 3,
-    random_state: int = 42,
-) -> pd.DataFrame:
+# ------------------------------------------------------------
+# SESSION CLUSTERING
+# ------------------------------------------------------------
+def cluster_sessions(run_sessions: List[Dict]) -> List[Dict]:
     """
-    Cluster individual running sessions into session types.
-
-    Parameters
-    ----------
-    sessions_df : pd.DataFrame
-        Individual running sessions.
-    n_clusters : int
-        Number of clusters (default = 3).
-    random_state : int
-        Random state for reproducibility.
-
-    Returns
-    -------
-    pd.DataFrame
-        sessions_df enriched with 'cluster_session'.
+    Cluster running sessions from DB-native dicts.
+    Returns same dicts enriched with `cluster_session`.
+    Only sessions with full ML feature set are clustered.
     """
 
-    df = sessions_df.dropna(subset=FEATURES_SESSION).copy()
+    if not run_sessions:
+        return []
 
-    X = df[scaler_sessions.feature_names_in_]
+    feature_names = list(scaler_sessions.feature_names_in_)
+
+    rows = []
+    valid_sessions = []
+
+    for s in run_sessions:
+        # Durée obligatoire
+        duration = s.get("duration_min")
+        if duration is None or duration <= 0:
+            continue
+
+        row = {
+            "distance_km": s.get("distance_km"),
+            "duration_min": duration,
+            "pace_min_per_km": s.get("pace_min_per_km"),
+            "low_intensity_pct": s.get("low_intensity_pct"),
+            "high_intensity_pct": s.get("high_intensity_pct"),
+        }
+
+        # 🔒 exclusion stricte si feature manquante
+        if any(row[f] is None for f in feature_names):
+            continue
+
+        rows.append(row)
+        valid_sessions.append(s)
+
+    if not rows:
+        return []
+
+    df = pd.DataFrame(rows)
+
+    # 🔒 strict ML alignment
+    X = df[feature_names]
+
     X_scaled = scaler_sessions.transform(X)
+    labels = kmeans_sessions.predict(X_scaled)
 
-    df["cluster_session"] = kmeans_sessions.predict(X_scaled)
+    for s, label in zip(valid_sessions, labels):
+        s["cluster_session"] = int(label)
 
-    return df
+    return valid_sessions

@@ -1,5 +1,5 @@
 import re
-from services.periods import normalize
+from intent_based_querying.normalization.normalizer import normalize
 
 
 QUESTION_WORDS = [

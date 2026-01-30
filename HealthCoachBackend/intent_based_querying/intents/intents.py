@@ -104,6 +104,14 @@ class CoachingResult(BaseModel):
 
 
 # -----------------------
+# Intent 6 : RECOMMENDATION
+# -----------------------
+class RecommendationIntent(BaseModel):
+    intent: Literal["RECOMMENDATION"]
+    recommendation_type: Optional[str] = None
+
+
+# -----------------------
 # Union global (ce que le LLM peut produire)
 # -----------------------
 Intent = Union[
