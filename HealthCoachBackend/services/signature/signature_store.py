@@ -1,7 +1,10 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
+from datetime import date
+from uuid import UUID
+
 from models.signature import RunnerSignatureModel
 from schemas.signature import RunnerSignature
-from uuid import UUID
 
 
 def load_signature(db: Session, user_id: UUID) -> RunnerSignature | None:
@@ -15,9 +18,6 @@ def load_signature(db: Session, user_id: UUID) -> RunnerSignature | None:
         return None
 
     return RunnerSignature(**row.signature_json)
-
-
-from datetime import date
 
 
 def save_signature(
@@ -39,6 +39,8 @@ def save_signature(
         row.period_end = date.fromisoformat(signature.period.end)
         row.weeks = signature.period.weeks
         row.needs_recompute = False
+        row.computed_at = func.now()
+        row.version = 1
     else:
         row = RunnerSignatureModel(
             user_id=user_id,
@@ -46,6 +48,9 @@ def save_signature(
             period_end=date.fromisoformat(signature.period.end),
             weeks=signature.period.weeks,
             signature_json=payload,
+            computed_at=func.now(),
+            version=1,
+            needs_recompute=False,
         )
         db.add(row)
 
@@ -53,9 +58,11 @@ def save_signature(
 
 
 def invalidate_signature(db: Session, user_id: UUID):
-    (
+    updated = (
         db.query(RunnerSignatureModel)
         .filter(RunnerSignatureModel.user_id == user_id)
         .update({"needs_recompute": True})
     )
-    db.commit()
+
+    if updated:
+        db.commit()
