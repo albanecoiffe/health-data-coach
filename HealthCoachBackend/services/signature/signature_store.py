@@ -66,3 +66,22 @@ def invalidate_signature(db: Session, user_id: UUID):
 
     if updated:
         db.commit()
+
+
+def invalidate_signature(db: Session, user_id: UUID) -> bool:
+    """
+    Marque la runner signature comme obsolète.
+    Le recalcul sera déclenché automatiquement au prochain accès.
+    """
+    updated = (
+        db.query(RunnerSignatureModel)
+        .filter(RunnerSignatureModel.user_id == user_id)
+        .update({"needs_recompute": True})
+    )
+
+    if updated:
+        db.commit()
+        print("♻️ Signature invalidée pour", user_id)
+        return True
+
+    return False

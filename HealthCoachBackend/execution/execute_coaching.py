@@ -6,7 +6,7 @@ from coaching.rules import (
     analyze_progress,
 )
 
-from services.signature.signature_service import get_or_build_signature
+from services.signature.signature_service import get_signature_from_store
 from execution.execute_period_summary import (
     execute_period_summary,
     FULL_SUMMARY_METRICS,
@@ -16,7 +16,7 @@ from intents.intents import CoachingResult
 
 def execute_coaching(db, user_id, intent, user_message):
     # 1️⃣ Charger la signature 52 semaines
-    signature = get_or_build_signature(db, user_id)
+    signature = get_signature_from_store(db, user_id)
 
     if not signature:
         return {

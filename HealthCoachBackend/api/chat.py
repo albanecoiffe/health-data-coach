@@ -4,8 +4,7 @@ from fastapi.responses import JSONResponse
 
 from schemas.schemas import ChatRequest
 
-from services.snapshot.store import get_snapshot_from_store
-from services.signature.store import get_signature_from_store
+from services.signature.signature_service import get_signature_from_store
 
 from datetime import datetime
 from database import SessionLocal

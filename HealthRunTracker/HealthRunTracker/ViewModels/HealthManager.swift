@@ -145,6 +145,14 @@ final class HealthManager: ObservableObject {
         }
     }
     
+    // Rebuild complet (manuel / exceptionnel) 
+    //  Méthode de rechargement complet
+    // Ce qu’elle fait exactement :
+        // relit tout HealthKit sur 24 mois,
+        // relit tout HealthKit sur 24 mois,
+        // relit tout HealthKit sur 24 mois,
+        // relit tout HealthKit sur 24 mois
+        
     func syncRunSessionsClean() {
 
         let calendar = Calendar.current

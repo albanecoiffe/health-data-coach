@@ -3,6 +3,7 @@ from datetime import timedelta, date
 
 from models.RunSession import RunSession
 from models.RunWeek import RunWeek
+from database import SessionLocal
 
 
 def build_run_weeks(db: Session, user_id):
@@ -94,3 +95,27 @@ def build_run_weeks(db: Session, user_id):
             db.add(row)
 
     db.commit()
+
+
+def rebuild_run_weeks_if_empty():
+    db = SessionLocal()
+
+    try:
+        count = db.query(RunWeek).count()
+
+        if count > 0:
+            print("🟢 RunWeek already populated — skipping rebuild")
+            return
+
+        print("🔁 RunWeek empty — rebuilding from RunSession")
+
+        user_ids = db.query(RunSession.user_id).distinct().all()
+
+        for (user_id,) in user_ids:
+            print("➡️ rebuilding weeks for user:", user_id)
+            build_run_weeks(db, user_id)
+
+        print("✅ RunWeek rebuild completed")
+
+    finally:
+        db.close()

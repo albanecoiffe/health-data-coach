@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models.RunSession import RunSession
 from schemas.schemas import RunSessionCreate
+from services.signature.signature_store import invalidate_signature
+from services.run_weeks.builder import build_run_weeks
 
 router = APIRouter(prefix="/api")
 
@@ -14,6 +16,7 @@ router = APIRouter(prefix="/api")
 # ======================================================
 @router.post("/run-session")
 def ingest_run_session(payload: RunSessionCreate):
+    print("📥 INGEST:", payload.start_time)
     db = SessionLocal()
 
     try:
@@ -34,6 +37,12 @@ def ingest_run_session(payload: RunSessionCreate):
 
         db.add(session)
         db.commit()
+
+        # 🔁 1️⃣ Mise à jour des semaines
+        build_run_weeks(db, payload.user_id)
+
+        # 🔁 2️⃣ Invalidation de la signature
+        invalidate_signature(db, payload.user_id)
 
         return {"status": "inserted"}
 

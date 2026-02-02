@@ -19,6 +19,11 @@ struct HealthRunTrackerApp: App {
                 .environmentObject(healthManager)
                 .onAppear {
                     requestHealthKitAndStartObserver()
+                    
+                    // ⚠️ TEMPORAIRE : rebuild DB
+                    // DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        // healthManager.syncRunSessionsClean()
+                    // }
                 }
         }
     }

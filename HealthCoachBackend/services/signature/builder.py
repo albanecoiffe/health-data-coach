@@ -29,7 +29,7 @@ def build_runner_signature(db: Session, user_id) -> RunnerSignature:
     sur une fenêtre glissante de 52 semaines,
     en excluant la semaine ISO en cours des trends.
     """
-
+    print("🔥 build_runner_signature START")
     today = date.today()
     current_week = today.isocalendar()[:2]  # (year, week)
 

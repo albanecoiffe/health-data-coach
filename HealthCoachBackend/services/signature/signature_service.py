@@ -1,34 +1,62 @@
-from sqlalchemy.orm import Session
 from uuid import UUID
+from sqlalchemy.orm import Session
+from datetime import date, datetime
 
-from services.signature.signature_store import load_signature, save_signature
+from models.signature import RunnerSignatureModel
+from schemas.signature import RunnerSignature
 from services.signature.builder import build_runner_signature
-from datetime import date
 
 
-def get_or_build_signature(db: Session, user_id):
+def get_signature_from_store(
+    db: Session,
+    user_id: UUID,
+) -> RunnerSignature:
     """
-    Retourne la signature depuis Neon si elle est valide,
-    sinon la reconstruit et la sauvegarde.
-    """
+    Source of truth pour la runner signature.
 
-    stored = load_signature(db, user_id)
+    Règles :
+    - si absente → calcul + persist
+    - si marquée needs_recompute → recalcul
+    - sinon → lecture DB
+    """
 
     today = date.today()
-    current_week = today.isocalendar()[:2]  # (year, week)
+    current_week = today.isocalendar()[:2]
 
-    # ✅ Cas 1 : signature existante
-    if stored:
-        print("🧠 Signature chargée depuis Neon")
-        period_end = date.fromisoformat(stored.period.end)
-        stored_week = period_end.isocalendar()[:2]
+    record = (
+        db.query(RunnerSignatureModel)
+        .filter(RunnerSignatureModel.user_id == user_id)
+        .one_or_none()
+    )
 
-        # même semaine → on la réutilise
-        if stored_week == current_week:
-            return stored
+    if record:
+        stored_week = record.period_end.isocalendar()[:2]
 
-    # ❌ Cas 2 : absente ou obsolète → rebuild
-    signature = build_runner_signature(db, user_id)
-    save_signature(db, user_id, signature)
+        if stored_week == current_week and not record.needs_recompute:
+            return RunnerSignature.model_validate(record.signature_json)
 
+    # 🔁 rebuild automatique
+    signature = build_runner_signature(db=db, user_id=user_id)
+
+    if record:
+        record.signature_json = signature.model_dump()
+        record.period_start = date.fromisoformat(signature.period.start)
+        record.period_end = date.fromisoformat(signature.period.end)
+        record.weeks = signature.period.weeks
+        record.needs_recompute = False
+        record.computed_at = datetime.utcnow()
+    else:
+        record = RunnerSignatureModel(
+            user_id=user_id,
+            period_start=date.fromisoformat(signature.period.start),
+            period_end=date.fromisoformat(signature.period.end),
+            weeks=signature.period.weeks,
+            signature_json=signature.model_dump(),
+            computed_at=datetime.utcnow(),
+            needs_recompute=False,
+            version=1,
+        )
+        db.add(record)
+
+    db.commit()
     return signature

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from database import SessionLocal
 from services.signature.builder import build_runner_signature
-from services.signature.signature_service import get_or_build_signature
+from services.signature.signature_service import get_signature_from_store
 from schemas.signature import RunnerSignature
 
 router = APIRouter(prefix="/api")
@@ -23,4 +23,5 @@ def get_runner_signature(
     user_id: UUID,
     db: Session = Depends(get_db),
 ):
-    return get_or_build_signature(db, user_id)
+    print("🔥 runner-signature endpoint called")
+    return get_signature_from_store(db, user_id)
