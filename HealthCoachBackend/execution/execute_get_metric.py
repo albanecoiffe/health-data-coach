@@ -1,19 +1,26 @@
 from sqlalchemy import func
 from models.RunSession import RunSession
 
-from intent_based_querying.normalization.normalizer import normalize_metric
-from intent_based_querying.normalization.time_resolver import resolve_period
-from intent_based_querying.intents.intents import QueryResult
+from normalization.normalizer import normalize_metric
+from normalization.time_resolver import (
+    resolve_period,
+    normalize_period_with_original_message,
+)
+from intents.intents import QueryResult
 
 
 def execute_get_metric(db, user_id, intent: dict):
     print("\n⚙️ EXECUTOR: GET_METRIC")
 
     metric = normalize_metric(intent["metric"])
-    period = intent["period"]
-    if not isinstance(period, str):
-        raise TypeError(f"period must be str, got {type(period)}: {period}")
 
+    # 🔹 NOUVEAU : normalisation défensive de la période
+    raw_period = intent["period"]
+    original_message = intent.get("original_message", "")
+
+    period = normalize_period_with_original_message(raw_period, original_message)
+
+    # 🔹 resolve_period accepte str OU dict (named_month)
     start, end = resolve_period(period)
 
     base_filter = (
@@ -67,7 +74,7 @@ def execute_get_metric(db, user_id, intent: dict):
 
     return QueryResult(
         metric=metric,
-        aggregation="sum",  # ou "count" selon metric si tu veux affiner plus tard
+        aggregation="sum",
         start=start.isoformat(),
         end=end.isoformat(),
         value=value,

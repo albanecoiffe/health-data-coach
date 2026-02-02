@@ -24,8 +24,8 @@ import os
 from uuid import UUID
 
 from datetime import datetime, timedelta
-from intent_based_querying.intents.intent_detector import detect_intent
-from intent_based_querying.routing.router import route_intent
+from intents.intent_detector import detect_intent
+from routing.router import route_intent
 
 DEFAULT_USER_ID = (
     UUID(os.getenv("DEFAULT_USER_ID")) if os.getenv("DEFAULT_USER_ID") else None

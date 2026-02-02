@@ -3,21 +3,21 @@
 from sqlalchemy.orm import Session
 from uuid import UUID
 
-from intent_based_querying.execution.execute_compare_periods import (
+from execution.execute_compare_periods import (
     execute_compare_periods,
 )
-from intent_based_querying.execution.execute_get_metric import execute_get_metric
-from intent_based_querying.execution.execute_period_summary import (
+from execution.execute_get_metric import execute_get_metric
+from execution.execute_period_summary import (
     execute_period_summary,
     FULL_SUMMARY_METRICS,
 )
-from intent_based_querying.execution.execute_coaching import execute_coaching
+from execution.execute_coaching import execute_coaching
 
-from intent_based_querying.normalization.normalizer import (
+from normalization.normalizer import (
     normalize_period,
     normalize_metric_from_message,
 )
-from intent_based_querying.verbalization.verbalizer import (
+from verbalization.verbalizer import (
     verbalize_metric_llm,
     verbalize_period_comparison_llm,
     verbalize_period_summary_llm,
@@ -25,7 +25,7 @@ from intent_based_querying.verbalization.verbalizer import (
     verbalize_coaching_llm,
     verbalize_recommendation_llm,
 )
-from intent_based_querying.execution.execute_recommendation import (
+from execution.execute_recommendation import (
     execute_recommendation,
 )
 
@@ -66,21 +66,32 @@ def route_intent(db, user_id, intent: dict):
     # COMPARE PERIODS
     # =====================================================
     if intent.get("intent") == "COMPARE_PERIODS":
-        intent = normalize_period(intent)
-        result = execute_compare_periods(db, user_id, intent)
+        # 1️⃣ Valeurs par défaut si le LLM ne les a pas fournies
+        if "period" not in intent and "compare_period" not in intent:
+            intent["period"] = "this_week"
+            intent["compare_period"] = "last_week"
 
+        # 2️⃣ Normalisation des périodes (string → dict si besoin)
+        intent = normalize_period(intent)
+
+        # 3️⃣ Exécution métier
+        result = execute_compare_periods(db, user_id, intent)
+        # result est un CompareResult (Pydantic), PAS un dict
+
+        # 4️⃣ Verbalisation (accès par attributs, pas par [])
         reply = verbalize_period_comparison_llm(
             user_message=intent.get("original_message", ""),
-            left_period=result["left_period"],
-            right_period=result["right_period"],
-            left=result["left"],
-            right=result["right"],
+            left_period=result.left_period,
+            right_period=result.right_period,
+            left_value=result.left_value,
+            right_value=result.right_value,
+            delta=result.delta,
         )
 
         return {
             "type": "ANSWER_NOW",
             "reply": reply,
-            "data": result,
+            "data": result,  # OK : objet Pydantic
         }
 
     # =====================================================
@@ -91,6 +102,7 @@ def route_intent(db, user_id, intent: dict):
             db,
             user_id,
             intent["period"],
+            intent.get("original_message", ""),
             FULL_SUMMARY_METRICS,
         )
 

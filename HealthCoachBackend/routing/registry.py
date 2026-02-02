@@ -1,6 +1,3 @@
-# semantic layer: metrics/aggregations autorisées
-
-# intent_based_querying/registry.py
 from sqlalchemy import func
 from models.RunSession import RunSession
 

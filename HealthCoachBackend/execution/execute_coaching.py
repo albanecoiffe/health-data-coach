@@ -1,5 +1,3 @@
-# intent_based_querying/executors/execute_coaching.py
-
 from coaching.dispatcher import detect_coaching_type
 from coaching.rules import (
     analyze_regularity,
@@ -9,10 +7,11 @@ from coaching.rules import (
 )
 
 from services.signature.signature_service import get_or_build_signature
-from intent_based_querying.execution.execute_period_summary import (
+from execution.execute_period_summary import (
     execute_period_summary,
+    FULL_SUMMARY_METRICS,
 )
-from intent_based_querying.intents.intents import CoachingResult
+from intents.intents import CoachingResult
 
 
 def execute_coaching(db, user_id, intent, user_message):
@@ -50,6 +49,8 @@ def execute_coaching(db, user_id, intent, user_message):
             db,
             user_id,
             period="THIS_WEEK",
+            original_message=user_message,
+            metrics=FULL_SUMMARY_METRICS,
         )
 
         if coaching_type == "VOLUME":

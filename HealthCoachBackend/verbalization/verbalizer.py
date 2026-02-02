@@ -1,9 +1,8 @@
 # transforme data brute -> texte (LLM ou template)
-# intent_based_querying/verbalizer.py
 
 from datetime import date, datetime
 from services.llm import call_ollama
-from intent_based_querying.verbalization.coaching.prompts import (
+from verbalization.coaching.prompts import (
     build_regularity_prompt,
     build_volume_prompt,
     build_load_prompt,

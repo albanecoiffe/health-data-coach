@@ -4,10 +4,10 @@ import HealthKit
 struct HealthMetricsCalculator {
 
     enum HeartRateZones {
-        static let z1Upper = 139.0
-        static let z2Upper = 152.0
-        static let z3Upper = 165.0
-        static let z4Upper = 178.0
+        static let z1Upper = 153.0
+        static let z2Upper = 164.0
+        static let z3Upper = 173.0
+        static let z4Upper = 182.0
     }
 
     static func computeZones(

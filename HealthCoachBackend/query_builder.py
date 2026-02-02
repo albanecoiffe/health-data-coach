@@ -1,14 +1,13 @@
 # intent -> SQLAlchemy statement (contrôlé)
 
 
-# intent_based_querying/query_builder.py
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from uuid import UUID
 from datetime import datetime
 
 from models.RunSession import RunSession
-from intent_based_querying.routing.registry import METRICS
+from routing.registry import METRICS
 
 
 def query_metric(

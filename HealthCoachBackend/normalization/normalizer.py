@@ -1,4 +1,3 @@
-# intent_based_querying/normalizer.py
 import json
 import re
 import unicodedata
@@ -17,6 +16,9 @@ def normalize_period(intent: dict) -> dict:
 
     # Case 1 — already structured (V2 OK)
     if isinstance(period, dict):
+        return intent
+
+    if period is None:
         return intent
 
     # Case 2 — relative days expressed loosely by LLM

@@ -56,10 +56,11 @@ class ComparePeriodsIntent(BaseModel):
 class CompareResult(BaseModel):
     metric: str
     aggregation: str
-    left_period: RelativePeriod
-    right_period: RelativePeriod
-    left_value: float | int | None
-    right_value: float | int | None
+    left_period: str
+    right_period: str
+    left_value: float
+    right_value: float
+    delta: float | None = None
 
 
 # -----------------------

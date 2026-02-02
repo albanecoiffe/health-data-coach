@@ -1,6 +1,6 @@
 # services/coaching/dispatcher.py
 
-from intent_based_querying.normalization.normalizer import normalize, lemmatize
+from normalization.normalizer import normalize, lemmatize
 
 # ======================================================
 # 🧠 LEXIQUES (STEMS)

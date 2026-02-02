@@ -25,11 +25,11 @@ struct WeeklyDistanceData: Identifiable, Equatable {
 struct HRZones {
 
     // Seuils alignés Apple Health (observés)
-    static let z1Upper = 139.0   // <139
-    static let z2Upper = 152.0   // 140–152
-    static let z3Upper = 165.0   // 153–165
-    static let z4Upper = 178.0   // 166–178
-    // Z5 >= 179
+    static let z1Upper = 153.0
+    static let z2Upper = 164.0
+    static let z3Upper = 173.0
+    static let z4Upper = 182.0
+    // Z5 >= 182
 }
 
 
