@@ -17,7 +17,10 @@ extension HealthManager {
 
         let datePredicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
         let runningPredicate = HKQuery.predicateForWorkouts(with: .running)
-        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [runningPredicate, datePredicate])
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            runningPredicate,
+            datePredicate
+        ])
 
         let query = HKSampleQuery(
             sampleType: .workoutType(),
@@ -33,65 +36,68 @@ extension HealthManager {
                 return
             }
 
-            // Reset
-            self.weeklyZoneBreakdown = []
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "fr_FR")
+            formatter.dateFormat = "E"
 
-            let group = DispatchGroup()
-            var results: [SessionZoneBreakdown] = []
+            var sessions: [DailyRunData] = []
+            let outerGroup = DispatchGroup()
 
-            // 1️⃣ Calcul des zones pour chaque workout
             for workout in workouts {
-                group.enter()
-                self.computeZonesForWorkout(workout) { breakdown in
-                    if let b = breakdown { results.append(b) }
-                    group.leave()
+                outerGroup.enter()
+
+                var zones: SessionZoneBreakdown?
+                var timeline: [HeartRateSample] = []
+
+                let innerGroup = DispatchGroup()
+
+                // 1️⃣ Zones FC
+                innerGroup.enter()
+                self.computeZonesForWorkout(workout) {
+                    zones = $0
+                    innerGroup.leave()
                 }
-            }
 
-            // 2️⃣ Une fois TOUTES les zones calculées → construire weeklyData
-            group.notify(queue: .main) {
-
-                self.weeklyZoneBreakdown = results.sorted {
-                    $0.workoutStart < $1.workoutStart
+                // 2️⃣ Timeline FC
+                innerGroup.enter()
+                self.fetchHeartRateTimeline(for: workout) {
+                    timeline = $0
+                    innerGroup.leave()
                 }
 
+                // 3️⃣ Construire la séance UNE FOIS tout prêt
+                innerGroup.notify(queue: .global()) {
 
-                let formatter = DateFormatter()
-                formatter.locale = Locale(identifier: "fr_FR")
-                formatter.dateFormat = "E"
+                    let avgHR = workout.statistics(
+                        for: HKQuantityType.quantityType(forIdentifier: .heartRate)!
+                    )?
+                    .averageQuantity()?
+                    .doubleValue(for: HKUnit(from: "count/min")) ?? 0
 
-                let data: [DailyRunData] = workouts.map { workout in
-
-                    let avgHR = workout.statistics(for: HKQuantityType.quantityType(forIdentifier: .heartRate)!)?
-                        .averageQuantity()?
-                        .doubleValue(for: HKUnit(from: "count/min")) ?? 0
-
-                    let label = formatter.string(from: workout.startDate)
-
-                    // Associer au bon breakdown
-                    let zones = results.first {
-                        abs($0.workoutStart.timeIntervalSince(workout.startDate)) < 1
-                    }
-
-                    return DailyRunData(
+                    let run = DailyRunData(
                         hkWorkout: workout,
                         date: workout.startDate,
                         distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
                         durationMin: workout.duration / 60,
                         elevationGainM: (workout.metadata?["HKElevationAscended"] as? HKQuantity)?
                             .doubleValue(for: .meter()) ?? 0,
-                        dayLabel: label,
+                        dayLabel: formatter.string(from: workout.startDate),
                         averageHeartRate: avgHR,
                         z1: zones?.z1 ?? 0,
                         z2: zones?.z2 ?? 0,
                         z3: zones?.z3 ?? 0,
                         z4: zones?.z4 ?? 0,
-                        z5: zones?.z5 ?? 0
+                        z5: zones?.z5 ?? 0,
+                        heartRateTimeline: timeline
                     )
 
+                    sessions.append(run)
+                    outerGroup.leave()
                 }
+            }
 
-                self.weeklyData = data
+            outerGroup.notify(queue: .main) {
+                self.weeklyData = sessions.sorted { $0.date < $1.date }
             }
         }
 
@@ -679,7 +685,7 @@ extension HealthManager {
                         z2: zones?.z2 ?? 0,
                         z3: zones?.z3 ?? 0,
                         z4: zones?.z4 ?? 0,
-                        z5: zones?.z5 ?? 0
+                        z5: zones?.z5 ?? 0, heartRateTimeline: []
                     )
                     
                     results.append(run)
@@ -738,13 +744,55 @@ extension HealthManager {
                         .doubleValue(for: .meter()) ?? 0,
                     dayLabel: formatter.string(from: workout.startDate),
                     averageHeartRate: avgHR,
-                    z1: 0, z2: 0, z3: 0, z4: 0, z5: 0
+                    z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, heartRateTimeline: []
                 )
 
 
             }
 
             completion(data)
+        }
+
+        healthStore.execute(query)
+    }
+}
+
+extension HealthManager {
+
+    func fetchHeartRateTimeline(
+        for workout: HKWorkout,
+        completion: @escaping ([HeartRateSample]) -> Void
+    ) {
+
+        let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
+        let predicate = HKQuery.predicateForSamples(
+            withStart: workout.startDate,
+            end: workout.endDate,
+            options: .strictStartDate
+        )
+
+        let query = HKSampleQuery(
+            sampleType: hrType,
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: [
+                NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+            ]
+        ) { _, samples, error in
+
+            guard let samples = samples as? [HKQuantitySample], error == nil else {
+                completion([])
+                return
+            }
+
+            let timeline: [HeartRateSample] = samples.map { s in
+                HeartRateSample(
+                    timeOffset: s.startDate.timeIntervalSince(workout.startDate),
+                    bpm: s.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                )
+            }
+
+            completion(timeline)
         }
 
         healthStore.execute(query)

@@ -1,5 +1,5 @@
 import json
-from services.llm import call_ollama
+from services.llm import call_llm, call_ollama
 from normalization.normalizer import safe_json_load
 
 SYSTEM_PROMPT = """
@@ -50,13 +50,13 @@ Example:
 }
 
 ========================================
-1 - SMALL TALK
+1 - SMALL_TALK
 ========================================
 - Si le message est une salutation ou une phrase vague
     (ex: "hello", "salut", "bonjour", "ça va", "merci", "ok") :
 
 Retourne EXACTEMENT :
-- "intent": "SMALL TALK",
+- "intent": "SMALL_TALK",
 
 - Tu n’as PAS le droit de demander un snapshot dans ce cas.
 
@@ -108,17 +108,17 @@ Retourne EXACTEMENT :
 
 
 def detect_intent(message: str) -> dict:
-    prompt = f"{SYSTEM_PROMPT}\nUser message: {message}"
-    raw = call_ollama(prompt)
+    #   raw = call_llm(
+    #       system_prompt=SYSTEM_PROMPT,
+    #       user_prompt=message,
+    #       temperature=0,
+    #   )
+    raw = call_ollama(prompt=f"{SYSTEM_PROMPT}\n\nUser message:\n{message}")
+
     print("🟣 LLM RAW OUTPUT :", raw)
+
     intent = safe_json_load(raw)
     print("🟢 PARSED INTENT :", intent)
 
     intent["original_message"] = message
-    print("\n🧠 INTENT DETECTION")
-    print("➡️ Prompt sent to LLM")
-    try:
-        return intent
-
-    except Exception:
-        raise ValueError("Invalid intent JSON from LLM")
+    return intent

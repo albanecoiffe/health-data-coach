@@ -3,7 +3,7 @@ import HealthKit
 // A garder pour le moment car
 // j'affiche encore : liste de séances, graph hebdomadaire, vue “Semaine”, stats locales simples
 
-struct DailyRunData: Identifiable {
+struct DailyRunData: Identifiable, Hashable {
     let hkWorkout: HKWorkout
     let id = UUID()
     let date: Date
@@ -18,5 +18,15 @@ struct DailyRunData: Identifiable {
     let z3: Double
     let z4: Double
     let z5: Double
+    
+    let heartRateTimeline: [HeartRateSample]
+
+    static func == (lhs: DailyRunData, rhs: DailyRunData) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }
 

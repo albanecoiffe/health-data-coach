@@ -38,17 +38,18 @@ def ingest_run_session(payload: RunSessionCreate):
         db.add(session)
         db.commit()
 
-        # 🔁 1️⃣ Mise à jour des semaines
+        # 🔁 1️⃣ Rebuild / upsert RunWeek
+        print("🔄 Rebuilding RunWeek for user", payload.user_id)
         build_run_weeks(db, payload.user_id)
 
-        # 🔁 2️⃣ Invalidation de la signature
+        # 🔁 2️⃣ Invalider la signature
+        print("♻️ Invalidating signature for user", payload.user_id)
         invalidate_signature(db, payload.user_id)
 
         return {"status": "inserted"}
 
     except IntegrityError:
         db.rollback()
-        # Doublon (user_id + start_time)
         return {"status": "duplicate"}
 
     finally:

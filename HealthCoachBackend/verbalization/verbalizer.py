@@ -1,7 +1,7 @@
 # transforme data brute -> texte (LLM ou template)
 
 from datetime import date, datetime
-from services.llm import call_ollama
+from services.llm import call_llm, call_ollama
 from verbalization.coaching.prompts import (
     build_regularity_prompt,
     build_volume_prompt,
@@ -62,7 +62,57 @@ Règles strictes :
 
 Réponse :
 """
-    return call_ollama(prompt).strip()
+
+
+# ==========================================
+# VERBALIZER VIA LLM
+# ==========================================
+# Le LLM transforme des faits BRUTS en texte naturel.
+def verbalize_metric_llm(
+    user_message: str,
+    metric: str,
+    value: float | int,
+    period_key: str,
+) -> str:
+    """
+    Le LLM transforme des faits BRUTS en texte naturel.
+    AUCUNE logique métier ici.
+    """
+    unit = UNIT_BY_METRIC.get(metric, "")
+
+    system_prompt = (
+        "Tu es un coach sportif factuel. "
+        "Tu reformules des données sans jamais les modifier."
+    )
+
+    user_prompt = f"""
+Question utilisateur :
+"{user_message}"
+
+Données factuelles (ne jamais les modifier) :
+- métrique : {metric}
+- valeur : {round(value, 2)}
+- période : {period_key}
+- La valeur est exprimée en {unit}.
+
+
+Règles strictes :
+- n'invente AUCUN chiffre
+- utilise des expressions naturelles (ex: "hier", "la semaine dernière")
+- ne mentionne pas de dates explicites sauf si l'utilisateur en a donné
+- réponse courte, claire
+- pas de conseils, pas d'analyse
+- Tu DOIS utiliser exactement la période fournie ("last_month", "yesterday", etc.)
+- Tu NE DOIS PAS la reformuler ("la semaine dernière", etc.)
+
+Réponse :
+"""
+    #    return call_llm(
+    #        system_prompt=system_prompt,
+    #        user_prompt=user_prompt,
+    #        temperature=0.3,
+    #    )
+    return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
 # ==========================================
@@ -76,10 +126,11 @@ def verbalize_period_comparison_llm(
     left: dict,
     right: dict,
 ) -> str:
-    prompt = f"""
-Tu es un coach sportif factuel.
-Tu compares deux périodes d'entraînement.
-
+    system_prompt = (
+        "Tu es un coach sportif factuel. "
+        "Tu compares des données sans jamais les modifier."
+    )
+    user_prompt = f"""
 Question utilisateur :
 "{user_message}"
 
@@ -107,7 +158,12 @@ Obligations :
 
 Réponse :
 """
-    return call_ollama(prompt).strip()
+    #    return call_llm(
+    #        system_prompt=system_prompt,
+    #        user_prompt=user_prompt,
+    #        temperature=0.3,
+    #    )
+    return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
 # ==========================================
@@ -117,10 +173,11 @@ def verbalize_period_summary_llm(
     user_message: str,
     summary,
 ) -> str:
-    prompt = f"""
-Tu es un narrateur factuel.
-Tu fais un bilan complet d'une période d'entraînement.
-
+    system_prompt = (
+        "Tu es un narrateur factuel. "
+        "Tu fais un bilan complet d'une période d'entraînement."
+    )
+    user_prompt = f"""
 Question utilisateur :
 "{user_message}"
 
@@ -146,14 +203,17 @@ Obligations :
 
 Réponse :
 """
-    return call_ollama(prompt).strip()
+    #    return call_llm(
+    #        system_prompt=system_prompt,
+    #        user_prompt=user_prompt,
+    #        temperature=0.3,
+    #    )
+    return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
 def verbalize_small_talk_llm(user_message: str) -> str:
-    prompt = f"""
-Tu es un assistant running bienveillant.
-Tu réponds de manière naturelle et humaine.
-
+    system_prompt = "Tu es un assistant running bienveillant. Tu réponds de manière naturelle et humaine."
+    user_prompt = f"""
 Message utilisateur :
 "{user_message}"
 
@@ -167,7 +227,13 @@ Règles :
 
 Réponse :
 """
-    return call_ollama(prompt).strip()
+    #    return call_llm(
+    #        system_prompt=system_prompt,
+    #        user_prompt=user_prompt,
+    #        temperature=0.3,
+    #    )
+
+    return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
 def verbalize_coaching_llm(
@@ -178,9 +244,6 @@ def verbalize_coaching_llm(
     already_started: bool = False,
 ) -> str:
     base_prompt = f"""
-Tu es un coach de course à pied humain, calme et expérimenté.
-Tu réponds STRICTEMENT dans la langue du message utilisateur.
-
 RÈGLES ABSOLUES :
 - Tu peux interpréter, mais tu NE DOIS PAS diagnostiquer
 - Tu NE DOIS PAS inventer de chiffres
@@ -225,7 +288,15 @@ PROFIL LONG TERME DU COUREUR
         return "Je ne suis pas sûr de ce que tu veux analyser."
 
     final_prompt = base_prompt + "\n\n" + specific_prompt
-    return call_ollama(final_prompt)
+
+    #    return call_llm(
+    #        system_prompt="Tu es un coach de course à pied humain, calme et expérimenté. Tu réponds STRICTEMENT dans la langue du message utilisateur.",
+    #        user_prompt=final_prompt,
+    #        temperature=0.3,
+    #    )
+    return call_ollama(
+        prompt=f"Tu es un coach de course à pied humain, calme et expérimenté. Tu réponds STRICTEMENT dans la langue du message utilisateur.\n\n{final_prompt}"
+    ).strip()
 
 
 # ======================================================
@@ -295,10 +366,6 @@ def verbalize_recommendation_llm(
     # Prompt LLM
     # --------------------------------------------------
     prompt = f"""
-Tu es un coach de course à pied expérimenté.
-Ton rôle est de formuler une recommandation de séances claire et réaliste
-à partir des données fournies, sans rien inventer.
-
 Règles générales de communication :
 - Tu ne commentes jamais les règles.
 - Tu ne justifies jamais ton comportement.
@@ -362,7 +429,12 @@ INSTRUCTIONS DE RÉDACTION
 Rédige une réponse claire, fluide, humaine et motivante.
 """
 
-    reply = call_ollama(prompt)
+    #    reply = call_llm(
+    #        system_prompt="Tu es un coach de course à pied expérimenté. Ton rôle est de formuler une recommandation de séances claire et réaliste à partir des données fournies, sans rien inventer.",
+    #        user_prompt=prompt,
+    #        temperature=0.3,
+    #    )
+    reply = call_ollama(prompt=prompt).strip()
     add_to_memory(session_id, "assistant", reply)
 
     return reply
