@@ -1,5 +1,5 @@
 import json
-from services.llm import call_llm, call_ollama
+from core.services.llm import call_llm, call_ollama
 from normalization.normalizer import safe_json_load
 
 SYSTEM_PROMPT = """

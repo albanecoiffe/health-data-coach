@@ -6,7 +6,7 @@ from coaching.rules import (
     analyze_progress,
 )
 
-from services.signature.signature_service import get_signature_from_store
+from core.services.signature.signature_service import get_signature_from_store
 from execution.execute_period_summary import (
     execute_period_summary,
     FULL_SUMMARY_METRICS,

@@ -1,14 +1,14 @@
 # transforme data brute -> texte (LLM ou template)
 
 from datetime import date, datetime
-from services.llm import call_llm, call_ollama
+from core.services.llm import call_llm, call_ollama
 from verbalization.coaching.prompts import (
     build_regularity_prompt,
     build_volume_prompt,
     build_load_prompt,
     build_progress_prompt,
 )
-from services.memory import add_to_memory, get_memory
+from core.services.memory import add_to_memory, get_memory
 from recommendation.schemas import WeekRecommendation
 
 UNIT_BY_METRIC = {

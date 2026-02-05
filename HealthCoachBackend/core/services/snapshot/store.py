@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from schemas.schemas import WeeklySnapshot
-from services.snapshot.builder import build_snapshot_from_db
+from core.services.snapshot.builder import build_snapshot_from_db
 
 
 def get_snapshot_from_store(

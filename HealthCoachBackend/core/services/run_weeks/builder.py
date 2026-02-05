@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from datetime import timedelta, date
 
-from models.RunSession import RunSession
-from models.RunWeek import RunWeek
+from core.models.RunSession import RunSession
+from core.models.RunWeek import RunWeek
 from database import SessionLocal
 
 

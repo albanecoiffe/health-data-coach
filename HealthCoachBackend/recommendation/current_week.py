@@ -1,5 +1,5 @@
 from datetime import date
-from models.RunSession import RunSession
+from core.models.RunSession import RunSession
 
 
 def get_current_week_sessions(db, user_id):

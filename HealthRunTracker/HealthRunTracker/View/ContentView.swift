@@ -706,10 +706,10 @@ struct HRZoneBarChart: View {
 
 func zoneColor(bpm: Double) -> Color {
     switch bpm {
-    case ..<149: return .blue
-    case 147..<159: return .teal
-    case 160..<173: return .green
-    case 174..<188: return .orange
+    case ..<153: return .blue
+    case 153..<164: return .teal
+    case 164..<173: return .green
+    case 174..<182: return .orange
     default: return .red
     }
 }

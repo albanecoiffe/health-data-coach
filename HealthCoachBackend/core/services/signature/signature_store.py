@@ -3,7 +3,7 @@ from sqlalchemy.sql import func
 from datetime import date
 from uuid import UUID
 
-from models.signature import RunnerSignatureModel
+from core.models.signature import RunnerSignatureModel
 from schemas.signature import RunnerSignature
 
 

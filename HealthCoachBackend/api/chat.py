@@ -4,14 +4,14 @@ from fastapi.responses import JSONResponse
 
 from schemas.schemas import ChatRequest
 
-from services.signature.signature_service import get_signature_from_store
+from core.services.signature.signature_service import get_signature_from_store
 
 from datetime import datetime
 from database import SessionLocal
 
 
 import pandas as pd
-from services.memory import (
+from core.services.memory import (
     store_signature,
     set_last_metric,
     get_last_metric,

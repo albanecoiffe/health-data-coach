@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from schemas.schemas import ChatRequest
 
 import pandas as pd
-from services.memory import (
+from core.services.memory import (
     store_signature,
     set_last_metric,
     get_last_metric,
@@ -20,9 +20,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from database import SessionLocal, engine
-from models.RunSession import RunSession
+from core.models.RunSession import RunSession
 from schemas.schemas import RunSessionCreate
-from services.run_weeks.builder import rebuild_run_weeks_if_empty
+from core.services.run_weeks.builder import rebuild_run_weeks_if_empty
 
 from api.runs import router as runs_router
 from api.snapshots import router as snapshots_router

@@ -1,8 +1,8 @@
 from datetime import date
 import numpy as np
 
-from services.run_weeks.loader import load_run_weeks
-from services.run_sessions.loader import load_run_sessions
+from core.services.run_weeks.loader import load_run_weeks
+from core.services.run_sessions.loader import load_run_sessions
 
 from recommendation.clustering import cluster_weeks, cluster_sessions
 from recommendation.risk import compute_weekly_risk, risk_level_from_proba

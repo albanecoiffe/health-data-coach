@@ -2,9 +2,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 from datetime import date, datetime
 
-from models.signature import RunnerSignatureModel
+from core.models.signature import RunnerSignatureModel
 from schemas.signature import RunnerSignature
-from services.signature.builder import build_runner_signature
+from core.services.signature.builder import build_runner_signature
 
 
 def get_signature_from_store(

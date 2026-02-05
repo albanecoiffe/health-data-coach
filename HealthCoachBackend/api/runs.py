@@ -3,10 +3,10 @@ from fastapi import APIRouter
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.RunSession import RunSession
+from core.models.RunSession import RunSession
 from schemas.schemas import RunSessionCreate
-from services.signature.signature_store import invalidate_signature
-from services.run_weeks.builder import build_run_weeks
+from core.services.signature.signature_store import invalidate_signature
+from core.services.run_weeks.builder import build_run_weeks
 
 router = APIRouter(prefix="/api")
 

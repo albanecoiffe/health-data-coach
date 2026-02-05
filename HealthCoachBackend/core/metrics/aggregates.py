@@ -3,7 +3,7 @@ from sqlalchemy import func
 from uuid import UUID
 from datetime import datetime
 
-from models.RunSession import RunSession
+from core.models.RunSession import RunSession
 
 
 def get_aggregated_totals(

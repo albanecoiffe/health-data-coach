@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models.RunWeek import RunWeek
+from core.models.RunWeek import RunWeek
 
 
 def load_run_weeks(db: Session, user_id):

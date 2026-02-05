@@ -1,4 +1,4 @@
-from models.RunSession import RunSession
+from core.models.RunSession import RunSession
 from schemas.schemas import (
     WeeklySnapshot,
     WeeklyTotals,
@@ -9,7 +9,7 @@ from schemas.schemas import (
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from services.snapshot.metrics import (
+from core.services.snapshot.metrics import (
     compute_totals,
     compute_zones_percent,
     compute_training_load,

@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models.RunSession import RunSession
+from core.models.RunSession import RunSession
 
 
 def load_run_sessions(db: Session, user_id):

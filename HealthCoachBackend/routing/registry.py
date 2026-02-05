@@ -1,5 +1,5 @@
 from sqlalchemy import func
-from models.RunSession import RunSession
+from core.models.RunSession import RunSession
 
 # --------------------------------------------------
 # Metrics registry (source of truth)
