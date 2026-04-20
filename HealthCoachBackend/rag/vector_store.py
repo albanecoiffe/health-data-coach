@@ -22,8 +22,6 @@ class VectorStore:
         if not connection_string:
             raise ValueError("connection_string est requis pour VectorStore")
 
-        print("🧠 PGVECTOR CONNECTION STRING =", connection_string)
-
         self.collection_name = collection_name
         self.connection_string = connection_string
         self.embedding_client = EmbeddingClient()

@@ -1,5 +1,5 @@
 import json
-from core.services.llm import call_llm, call_ollama
+from core.services.llm import call_ollama
 from normalization.normalizer import safe_json_load
 
 SYSTEM_PROMPT = """
@@ -108,11 +108,6 @@ Retourne EXACTEMENT :
 
 
 def detect_intent(message: str) -> dict:
-    #   raw = call_llm(
-    #       system_prompt=SYSTEM_PROMPT,
-    #       user_prompt=message,
-    #       temperature=0,
-    #   )
     raw = call_ollama(prompt=f"{SYSTEM_PROMPT}\n\nUser message:\n{message}")
 
     print("🟣 LLM RAW OUTPUT :", raw)

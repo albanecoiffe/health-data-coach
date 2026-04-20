@@ -1,11 +1,8 @@
 import requests
 
-# ========== LLM CONFIGURATION ==========
-# OLLAMA model, locally hosted
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "llama3"
+from core.config import get_settings
 
-# ========== UTILITIES ==========
+settings = get_settings()
 
 
 def call_llm(
@@ -14,7 +11,7 @@ def call_llm(
     user_prompt: str,
     temperature: float = 0.2,
     max_tokens: int = 256,
-    model: str = MODEL,
+    model: str | None = None,
 ) -> str:
     if not system_prompt or not user_prompt:
         raise ValueError("system_prompt and user_prompt must be non-empty strings")
@@ -29,16 +26,16 @@ def call_llm(
     return call_ollama(merged_prompt, model=model, temperature=temperature).strip()
 
 
-def call_ollama(prompt: str, model: str = MODEL, temperature: float = 0) -> str:
+def call_ollama(prompt: str, model: str | None = None, temperature: float = 0) -> str:
     res = requests.post(
-        OLLAMA_URL,
+        settings.ollama_url,
         json={
-            "model": model,
+            "model": model or settings.ollama_model,
             "prompt": prompt,
             "stream": False,
             "options": {"temperature": temperature, "top_p": 0},
         },
-        timeout=90,
+        timeout=settings.ollama_timeout_seconds,
     )
     res.raise_for_status()
     return res.json()["response"]
