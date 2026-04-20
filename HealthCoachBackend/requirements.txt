@@ -4,3 +4,7 @@ requests
 spacy
 nltk
 scikit-learn
+psycopg2-binary
+SQLAlchemy
+python-dotenv
+alembic

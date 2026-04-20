@@ -78,8 +78,6 @@ struct ChatView: View {
         .background(Color.black.ignoresSafeArea())
         .onAppear {
             print("🔥 ChatView onAppear")
-            // A COMMENTER QUAND ON NE VEUT PAS UPDATE LES CSV :
-            vm.refreshSessionsCSVIfNeeded()
             vm.onAppear()
         
         }
