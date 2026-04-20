@@ -76,7 +76,6 @@ struct ContentView: View {
 extension ContentView {
 
     func loadWeekData() {
-        healthManager.requestAuthorization()
         reloadWeek()
     }
 
@@ -479,6 +478,10 @@ struct WeekHRZoneChartView: View {
         ]
     }
 
+    private var totalZoneTime: Double {
+        totals.map(\.value).reduce(0, +)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
 
@@ -489,6 +492,10 @@ struct WeekHRZoneChartView: View {
 
             if sessions.isEmpty {
                 Text("Aucune donnée cette semaine")
+                    .foregroundColor(.gray)
+                    .padding()
+            } else if totalZoneTime <= 0 {
+                Text("Aucune donnée de fréquence cardiaque exploitable cette semaine")
                     .foregroundColor(.gray)
                     .padding()
             } else {
@@ -706,10 +713,10 @@ struct HRZoneBarChart: View {
 
 func zoneColor(bpm: Double) -> Color {
     switch bpm {
-    case ..<153: return .blue
-    case 153..<164: return .teal
-    case 164..<173: return .green
-    case 174..<182: return .orange
+    case ..<145: return .blue
+    case 145..<159: return .teal
+    case 159..<173: return .green
+    case 173..<186: return .orange
     default: return .red
     }
 }

@@ -32,7 +32,10 @@ extension HealthManager {
             guard let self = self,
                   let workouts = samples as? [HKWorkout],
                   error == nil else {
-                DispatchQueue.main.async { self?.weeklyData = [] }
+                DispatchQueue.main.async {
+                    self?.weeklyData = []
+                    self?.weeklyZoneBreakdown = []
+                }
                 return
             }
 
@@ -97,7 +100,18 @@ extension HealthManager {
             }
 
             outerGroup.notify(queue: .main) {
-                self.weeklyData = sessions.sorted { $0.date < $1.date }
+                let sortedSessions = sessions.sorted { $0.date < $1.date }
+                self.weeklyData = sortedSessions
+                self.weeklyZoneBreakdown = sortedSessions.map {
+                    SessionZoneBreakdown(
+                        workoutStart: $0.date,
+                        z1: $0.z1,
+                        z2: $0.z2,
+                        z3: $0.z3,
+                        z4: $0.z4,
+                        z5: $0.z5
+                    )
+                }
             }
         }
 

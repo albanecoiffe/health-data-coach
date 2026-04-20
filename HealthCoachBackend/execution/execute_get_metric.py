@@ -1,26 +1,27 @@
-from sqlalchemy import func
-from core.models.RunSession import RunSession
-
 from normalization.normalizer import normalize_metric
 from normalization.time_resolver import (
     resolve_period,
     normalize_period_with_original_message,
 )
 from intents.intents import QueryResult
+from core.metrics.metrics import METRIC_DEFINITION
+from core.models.RunSession import RunSession
+from sqlalchemy import func
 
 
 def execute_get_metric(db, user_id, intent: dict):
-    print("\n⚙️ EXECUTOR: GET_METRIC")
-
     metric = normalize_metric(intent["metric"])
 
-    # 🔹 NOUVEAU : normalisation défensive de la période
-    raw_period = intent["period"]
-    original_message = intent.get("original_message", "")
+    if metric not in METRIC_DEFINITION:
+        raise ValueError(f"Metric not supported: {metric}")
 
-    period = normalize_period_with_original_message(raw_period, original_message)
+    spec = METRIC_DEFINITION[metric]
 
-    # 🔹 resolve_period accepte str OU dict (named_month)
+    period = normalize_period_with_original_message(
+        intent["period"],
+        intent.get("original_message", ""),
+    )
+
     start, end = resolve_period(period)
 
     base_filter = (
@@ -29,52 +30,23 @@ def execute_get_metric(db, user_id, intent: dict):
         RunSession.start_time < end,
     )
 
-    if metric == "distance_km":
-        value = (
-            db.query(func.coalesce(func.sum(RunSession.distance_km), 0))
-            .filter(*base_filter)
-            .scalar()
-        )
+    col = spec["column"]
+    agg = spec["aggregation"]
 
-    elif metric == "sessions":
-        value = db.query(func.count(RunSession.id)).filter(*base_filter).scalar()
-
-    elif metric == "duration_min":
-        value = (
-            db.query(func.coalesce(func.sum(RunSession.duration_min), 0))
-            .filter(*base_filter)
-            .scalar()
-        )
-
-    elif metric == "avg_hr":
-        value = (
-            db.query(func.coalesce(func.avg(RunSession.avg_hr), 0))
-            .filter(*base_filter)
-            .scalar()
-        )
-
-    elif metric == "elevation_m":
-        value = (
-            db.query(func.coalesce(func.sum(RunSession.elevation_m), 0))
-            .filter(*base_filter)
-            .scalar()
-        )
-
-    elif metric == "active_kcal":
-        value = (
-            db.query(func.coalesce(func.sum(RunSession.active_kcal), 0))
-            .filter(*base_filter)
-            .scalar()
-        )
-
+    if agg == "sum":
+        expr = func.coalesce(func.sum(col), 0)
+    elif agg == "avg":
+        expr = func.coalesce(func.avg(col), 0)
+    elif agg == "count":
+        expr = func.count(col)
     else:
-        raise ValueError(f"Metric not supported: {metric}")
+        raise ValueError(f"Unknown aggregation: {agg}")
 
-    print(f"✅ Computed value for {metric} from {start} to {end} : {value}")
+    value = db.query(expr).filter(*base_filter).scalar()
 
     return QueryResult(
         metric=metric,
-        aggregation="sum",
+        aggregation=agg,
         start=start.isoformat(),
         end=end.isoformat(),
         value=value,

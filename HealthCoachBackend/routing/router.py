@@ -1,5 +1,6 @@
 # endpoint /chat_v2 qui orchestre tout
-# app/v2/router.py
+# routing/router.py
+
 from sqlalchemy.orm import Session
 from uuid import UUID
 
@@ -12,11 +13,15 @@ from execution.execute_period_summary import (
     FULL_SUMMARY_METRICS,
 )
 from execution.execute_coaching import execute_coaching
+from execution.execute_recommendation import (
+    execute_recommendation,
+)
 
 from normalization.normalizer import (
     normalize_period,
     normalize_metric_from_message,
 )
+
 from verbalization.verbalizer import (
     verbalize_metric_llm,
     verbalize_period_comparison_llm,
@@ -25,19 +30,49 @@ from verbalization.verbalizer import (
     verbalize_coaching_llm,
     verbalize_recommendation_llm,
 )
-from execution.execute_recommendation import (
-    execute_recommendation,
-)
+
+from routing.semantic_entrypoint import SemanticEntrypoint
+import os
+
+# =====================================================
+# INITIALISATION DU PRÉ-ROUTER SÉMANTIQUE (A)
+# =====================================================
+
+# DATABASE_URL dans .env
+
+SEMANTIC_ENTRYPOINT = SemanticEntrypoint(connection_string=os.getenv("DATABASE_URL"))
 
 
-def route_intent(db, user_id, intent: dict):
+# =====================================================
+# 🧭 ROUTER MÉTIER (INCHANGÉ DANS SA LOGIQUE)
+# =====================================================
+
+
+def route_intent(db: Session, user_id, intent: dict):
     print("\n🧭 ROUTER")
     print("➡️ Intent type :", intent.get("intent"))
 
     session_id: UUID | None = intent.get("session_id")
 
-    intent = normalize_metric_from_message(intent)
+    # -------------------------------------------------
+    # 🧠 PRÉ-ROUTING SÉMANTIQUE (SOLUTION A)
+    # -------------------------------------------------
+    original_message = intent.get("original_message")
+    if not original_message:
+        original_message = intent.get("message", "")
 
+    intent = SEMANTIC_ENTRYPOINT.resolve_intent(
+        message=original_message,
+        base_intent=intent,
+    )
+
+    print("🧠 Intent source :", intent.get("_source"))
+    print("🧠 Confidence :", intent.get("_confidence"))
+
+    # -------------------------------------------------
+    # 🔧 NORMALISATION EXISTANTE
+    # -------------------------------------------------
+    intent = normalize_metric_from_message(intent)
     print("✅ Normalized intent :", intent)
 
     # =====================================================
@@ -46,8 +81,6 @@ def route_intent(db, user_id, intent: dict):
     if intent.get("intent") == "GET_METRIC":
         intent = normalize_period(intent)
         result = execute_get_metric(db, user_id, intent)
-
-        print("🗣️ CALLING VERBALIZER")
 
         reply = verbalize_metric_llm(
             user_message=intent.get("original_message", ""),
@@ -66,19 +99,14 @@ def route_intent(db, user_id, intent: dict):
     # COMPARE PERIODS
     # =====================================================
     if intent.get("intent") == "COMPARE_PERIODS":
-        # 1️⃣ Valeurs par défaut si le LLM ne les a pas fournies
         if "period" not in intent and "compare_period" not in intent:
             intent["period"] = "this_week"
             intent["compare_period"] = "last_week"
 
-        # 2️⃣ Normalisation des périodes (string → dict si besoin)
         intent = normalize_period(intent)
 
-        # 3️⃣ Exécution métier
         result = execute_compare_periods(db, user_id, intent)
-        # result est un CompareResult (Pydantic), PAS un dict
 
-        # 4️⃣ Verbalisation (accès par attributs, pas par [])
         reply = verbalize_period_comparison_llm(
             user_message=intent.get("original_message", ""),
             left_period=result.left_period,
@@ -91,7 +119,7 @@ def route_intent(db, user_id, intent: dict):
         return {
             "type": "ANSWER_NOW",
             "reply": reply,
-            "data": result,  # OK : objet Pydantic
+            "data": result,
         }
 
     # =====================================================
@@ -128,7 +156,6 @@ def route_intent(db, user_id, intent: dict):
             intent.get("original_message", ""),
         )
 
-        # Erreurs métier
         if result.get("error"):
             return {
                 "type": "ANSWER_NOW",
@@ -155,8 +182,11 @@ def route_intent(db, user_id, intent: dict):
         }
 
     # =====================================================
-    if intent["intent"] == "RECOMMENDATION":
+    # RECOMMENDATION
+    # =====================================================
+    if intent.get("intent") == "RECOMMENDATION":
         reco = execute_recommendation(db, user_id)
+
         reply = verbalize_recommendation_llm(
             recommendation=reco,
             session_id=session_id,
@@ -181,6 +211,9 @@ def route_intent(db, user_id, intent: dict):
             "reply": reply,
         }
 
+    # =====================================================
+    # FALLBACK FINAL
+    # =====================================================
     return {
         "type": "ANSWER_NOW",
         "reply": "Je n’ai pas compris ta demande.",

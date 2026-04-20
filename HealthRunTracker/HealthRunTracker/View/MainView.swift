@@ -6,7 +6,6 @@ struct MainView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-
             Picker("Vue", selection: $selectedView) {
                 Text("Semaine").tag(0)
                 Text("Chat").tag(1)
@@ -27,10 +26,6 @@ struct MainView: View {
                     RoutesMapView(healthManager: healthManager)
                 }
             }
-        }
-        .background(Color.black.ignoresSafeArea())
-        .onAppear {
-            healthManager.requestAuthorization()
         }
     }
 }

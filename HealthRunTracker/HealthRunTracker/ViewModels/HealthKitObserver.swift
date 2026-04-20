@@ -78,7 +78,7 @@ final class HealthKitObserver {
         print("⏱ Fetch recent workouts (last 24h)")
 
         let end = Date()
-        let start = Calendar.current.date(byAdding: .day, value: -1, to: end)!
+        let start = Calendar.current.date(byAdding: .day, value: -30, to: end)!
 
         // On relit les séances récentes
         reader.fetchRunningWorkouts(from: start, to: end) { workouts in

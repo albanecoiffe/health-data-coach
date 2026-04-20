@@ -23,11 +23,16 @@ from database import SessionLocal, engine
 from core.models.RunSession import RunSession
 from schemas.schemas import RunSessionCreate
 from core.services.run_weeks.builder import rebuild_run_weeks_if_empty
+from core.services.imports.sessions_csv import (
+    auto_import_sessions_on_startup,
+    start_csv_polling_worker,
+)
 
 from api.runs import router as runs_router
 from api.snapshots import router as snapshots_router
 from api.health import router as health_router
 from api.imports_csv import router as imports_router
+from api.imports_apple import router as imports_apple_router
 from api.errors import validation_exception_handler
 from api.signature import router as signature_router
 from api.chat import router as chat_router
@@ -41,6 +46,7 @@ app.include_router(snapshots_router)
 
 app.include_router(runs_router)
 app.include_router(imports_router)
+app.include_router(imports_apple_router)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 app.include_router(signature_router)
@@ -54,3 +60,7 @@ def root():
 @app.on_event("startup")
 def startup_tasks():
     rebuild_run_weeks_if_empty()
+    result = auto_import_sessions_on_startup()
+    print("📦 Startup CSV import:", result)
+    poller = start_csv_polling_worker()
+    print("🕒 CSV polling worker:", poller)
