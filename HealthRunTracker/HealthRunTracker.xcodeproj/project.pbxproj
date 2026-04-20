@@ -17,14 +17,14 @@
 				Info.plist,
 			);
 			platformFiltersByRelativePath = {
-				Components/MapViewRepresentable.swift = (ios, );
-				Components/WeeklyDistanceChart.swift = (ios, );
-				HealthRunTrackerApp.swift = (ios, );
-				View/ContentView.swift = (ios, );
-				View/MainView.swift = (ios, );
-				View/RoutesMapView.swift = (ios, );
-				View/YearView.swift = (ios, );
-				ViewModels/HealthManager.swift = (ios, );
+				App/HealthRunTrackerApp.swift = (ios, );
+				App/MainView.swift = (ios, );
+				Features/Routes/MapViewRepresentable.swift = (ios, );
+				Features/Routes/RoutesMapView.swift = (ios, );
+				Features/Week/WeekView.swift = (ios, );
+				Features/Week/WeeklyDistanceChart.swift = (ios, );
+				Features/Year/YearView.swift = (ios, );
+				HealthKit/HealthManager.swift = (ios, );
 			};
 			target = F36CD51D2EC4A11800414C85 /* HealthRunTracker */;
 		};
