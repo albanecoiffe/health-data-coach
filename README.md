@@ -49,6 +49,8 @@ Health Data Coach
 
 **Technologies** : SwiftUI, HealthKit
 
+Documentation dédiée : [`HealthRunTracker/README.md`](HealthRunTracker/README.md)
+
 ### Rôle
 
 * Accès sécurisé aux données Apple Health
