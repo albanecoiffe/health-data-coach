@@ -31,16 +31,14 @@ from verbalization.verbalizer import (
     verbalize_recommendation_llm,
 )
 
+from core.config import get_settings
 from routing.semantic_entrypoint import SemanticEntrypoint
-import os
 
 # =====================================================
 # INITIALISATION DU PRÉ-ROUTER SÉMANTIQUE (A)
 # =====================================================
 
-# DATABASE_URL dans .env
-
-SEMANTIC_ENTRYPOINT = SemanticEntrypoint(connection_string=os.getenv("DATABASE_URL"))
+SEMANTIC_ENTRYPOINT = SemanticEntrypoint(connection_string=get_settings().database_url)
 
 
 # =====================================================

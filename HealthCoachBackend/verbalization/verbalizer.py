@@ -1,7 +1,7 @@
 # transforme data brute -> texte (LLM ou template)
 
 from datetime import date, datetime
-from core.services.llm import call_llm, call_ollama
+from core.services.llm import call_ollama
 from verbalization.coaching.prompts import (
     build_regularity_prompt,
     build_volume_prompt,
@@ -19,49 +19,6 @@ UNIT_BY_METRIC = {
     "elevation_m": "mètres",
     "active_kcal": "kcal",
 }
-
-
-# ==========================================
-# VERBALIZER VIA LLM
-# ==========================================
-# Le LLM transforme des faits BRUTS en texte naturel.
-def verbalize_metric_llm(
-    user_message: str,
-    metric: str,
-    value: float | int,
-    period_key: str,
-) -> str:
-    """
-    Le LLM transforme des faits BRUTS en texte naturel.
-    AUCUNE logique métier ici.
-    """
-    unit = UNIT_BY_METRIC.get(metric, "")
-
-    prompt = f"""
-Tu es un coach sportif.
-Tu réponds à la question de l'utilisateur en langage naturel.
-
-Question utilisateur :
-"{user_message}"
-
-Données factuelles (ne jamais les modifier) :
-- métrique : {metric}
-- valeur : {round(value, 2)}
-- période : {period_key}
-- La valeur est exprimée en {unit}.
-
-
-Règles strictes :
-- n'invente AUCUN chiffre
-- utilise des expressions naturelles (ex: "hier", "la semaine dernière")
-- ne mentionne pas de dates explicites sauf si l'utilisateur en a donné
-- réponse courte, claire
-- pas de conseils, pas d'analyse
-- Tu DOIS utiliser exactement la période fournie ("last_month", "yesterday", etc.)
-- Tu NE DOIS PAS la reformuler ("la semaine dernière", etc.)
-
-Réponse :
-"""
 
 
 # ==========================================
@@ -107,11 +64,6 @@ Règles strictes :
 
 Réponse :
 """
-    #    return call_llm(
-    #        system_prompt=system_prompt,
-    #        user_prompt=user_prompt,
-    #        temperature=0.3,
-    #    )
     return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
@@ -158,11 +110,6 @@ Obligations :
 
 Réponse :
 """
-    #    return call_llm(
-    #        system_prompt=system_prompt,
-    #        user_prompt=user_prompt,
-    #        temperature=0.3,
-    #    )
     return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
@@ -203,11 +150,6 @@ Obligations :
 
 Réponse :
 """
-    #    return call_llm(
-    #        system_prompt=system_prompt,
-    #        user_prompt=user_prompt,
-    #        temperature=0.3,
-    #    )
     return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
@@ -227,12 +169,6 @@ Règles :
 
 Réponse :
 """
-    #    return call_llm(
-    #        system_prompt=system_prompt,
-    #        user_prompt=user_prompt,
-    #        temperature=0.3,
-    #    )
-
     return call_ollama(prompt=f"{system_prompt}\n\n{user_prompt}").strip()
 
 
@@ -289,11 +225,6 @@ PROFIL LONG TERME DU COUREUR
 
     final_prompt = base_prompt + "\n\n" + specific_prompt
 
-    #    return call_llm(
-    #        system_prompt="Tu es un coach de course à pied humain, calme et expérimenté. Tu réponds STRICTEMENT dans la langue du message utilisateur.",
-    #        user_prompt=final_prompt,
-    #        temperature=0.3,
-    #    )
     return call_ollama(
         prompt=f"Tu es un coach de course à pied humain, calme et expérimenté. Tu réponds STRICTEMENT dans la langue du message utilisateur.\n\n{final_prompt}"
     ).strip()
@@ -429,11 +360,6 @@ INSTRUCTIONS DE RÉDACTION
 Rédige une réponse claire, fluide, humaine et motivante.
 """
 
-    #    reply = call_llm(
-    #        system_prompt="Tu es un coach de course à pied expérimenté. Ton rôle est de formuler une recommandation de séances claire et réaliste à partir des données fournies, sans rien inventer.",
-    #        user_prompt=prompt,
-    #        temperature=0.3,
-    #    )
     reply = call_ollama(prompt=prompt).strip()
     add_to_memory(session_id, "assistant", reply)
 

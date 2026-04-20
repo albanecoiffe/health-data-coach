@@ -1,5 +1,4 @@
 import json
-import os
 import re
 from io import BytesIO
 from typing import Any
@@ -7,6 +6,7 @@ from typing import Any
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
+from core.config import get_settings
 from core.services.imports.sessions_csv import import_sessions_dataframe
 
 
@@ -157,7 +157,7 @@ def _normalize_records(records: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 def _assert_import_token(request: Request):
-    expected = os.getenv("IMPORT_API_TOKEN", "").strip()
+    expected = get_settings().import_api_token
     if not expected:
         return
     provided = request.headers.get("X-Import-Token", "").strip()

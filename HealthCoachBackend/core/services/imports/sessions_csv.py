@@ -1,4 +1,3 @@
-import os
 import threading
 import time
 from pathlib import Path
@@ -9,6 +8,7 @@ import pandas as pd
 from sqlalchemy.exc import IntegrityError
 
 from core.models.RunSession import RunSession
+from core.config import get_settings
 from core.services.run_weeks.builder import build_run_weeks
 from core.services.signature.signature_store import invalidate_signature
 from database import SessionLocal
@@ -22,9 +22,9 @@ def resolve_sessions_csv_path(csv_path: str | None = None) -> Path:
     if csv_path:
         return Path(csv_path).expanduser()
 
-    env_path = os.getenv("SESSIONS_CSV_PATH")
-    if env_path:
-        return Path(env_path).expanduser()
+    settings = get_settings()
+    if settings.sessions_csv_path:
+        return Path(settings.sessions_csv_path).expanduser()
 
     return DEFAULT_SESSIONS_CSV_PATH
 
@@ -70,7 +70,7 @@ def _parse_start_time(row: pd.Series):
 
 
 def _resolve_user_id(explicit_user_id: str | None) -> UUID:
-    value = explicit_user_id or os.getenv("DEFAULT_USER_ID")
+    value = explicit_user_id or get_settings().default_user_id
     if not value:
         raise ValueError("Missing user_id and DEFAULT_USER_ID")
     return UUID(str(value))
@@ -150,14 +150,7 @@ def import_sessions_csv_file(
 
 
 def auto_import_sessions_on_startup() -> dict[str, Any]:
-    enabled = os.getenv("AUTO_IMPORT_SESSIONS_ON_STARTUP", "false").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-    if not enabled:
+    if not get_settings().auto_import_sessions_on_startup:
         return {"status": "disabled"}
 
     return import_sessions_csv_file()
@@ -186,7 +179,7 @@ def _csv_poller_loop(interval_s: int):
 
 
 def start_csv_polling_worker() -> dict[str, Any]:
-    interval_s = int(os.getenv("SESSIONS_CSV_POLL_SECONDS", "0"))
+    interval_s = get_settings().sessions_csv_poll_seconds
     if interval_s <= 0:
         return {"status": "disabled", "reason": "SESSIONS_CSV_POLL_SECONDS<=0"}
 
