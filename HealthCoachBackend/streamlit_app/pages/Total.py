@@ -1,5 +1,3 @@
-from datetime import date
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -12,13 +10,13 @@ st.title("Running - Total depuis le debut")
 
 
 @st.cache_data(ttl=60)
-def load_data(user_id: str) -> pd.DataFrame:
+def load_data(user_id):
     return load_all_sessions(user_id)
 
 
 user_id = resolve_user_id()
 df = load_data(user_id)
-st.caption(f"Source: Neon (run_sessions) - user_id={user_id}")
+st.caption(f"Source: Neon ou CSV local - user_id={user_id or 'non defini'}")
 
 if df.empty:
     st.info("Aucune seance en base.")
@@ -26,104 +24,82 @@ if df.empty:
 
 min_date = df["start_time"].min().date()
 max_date = df["start_time"].max().date()
-
 c0, c1 = st.columns(2)
-with c0:
-    start = st.date_input("Debut", value=min_date, min_value=min_date, max_value=max_date)
-with c1:
-    end = st.date_input("Fin", value=max_date, min_value=min_date, max_value=max_date)
+start = c0.date_input("Debut", min_date)
+end = c1.date_input("Fin", max_date)
 
 if start > end:
     st.error("La date de debut doit etre <= date de fin.")
     st.stop()
 
 mask = (df["start_time"].dt.date >= start) & (df["start_time"].dt.date <= end)
-df = df.loc[mask].copy()
+dt = df.loc[mask].copy()
 
-if df.empty:
+if dt.empty:
     st.info("Aucune seance sur cette periode.")
     st.stop()
 
-df["week_start"] = df["start_time"].dt.to_period("W").apply(lambda p: p.start_time)
-df["month_start"] = df["start_time"].dt.to_period("M").apply(lambda p: p.start_time)
-df["year"] = df["start_time"].dt.year
+dt["week_start"] = dt["start_time"].dt.to_period("W").apply(lambda p: p.start_time)
+dt["month"] = dt["start_time"].dt.to_period("M").apply(lambda p: p.start_time)
 
-weekly = (
-    df.groupby("week_start", as_index=False)
-    .agg(
-        distance_km=("distance_km", "sum"),
-        duration_min=("duration_min", "sum"),
-        sessions=("start_time", "count"),
-    )
-    .sort_values("week_start")
+weekly = dt.groupby("week_start", as_index=False).agg(
+    distance_km=("distance_km", "sum"),
+    duration_min=("duration_min", "sum"),
 )
+monthly = dt.groupby("month", as_index=False).agg(distance_km=("distance_km", "sum"))
 
-monthly = (
-    df.groupby("month_start", as_index=False)
-    .agg(distance_km=("distance_km", "sum"), duration_min=("duration_min", "sum"))
-    .sort_values("month_start")
-)
-
-yearly = (
-    df.groupby("year", as_index=False)
-    .agg(
-        distance_km=("distance_km", "sum"),
-        duration_min=("duration_min", "sum"),
-        sessions=("start_time", "count"),
-    )
-    .sort_values("year")
-)
-
-total_distance = df["distance_km"].sum()
-total_duration = df["duration_min"].sum()
-total_sessions = len(df)
-avg_weekly = weekly["distance_km"].mean() if not weekly.empty else 0.0
+total_distance = dt["distance_km"].sum()
+total_duration = dt["duration_min"].sum()
+total_sessions = len(dt)
+avg_weekly = weekly["distance_km"].mean()
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Distance totale", f"{total_distance:.0f} km")
-m2.metric("Duree totale", f"{total_duration:.0f} min")
-m3.metric("Nombre de seances", f"{total_sessions}")
-m4.metric("Moyenne km / semaine", f"{avg_weekly:.1f}")
+m1.metric("Distance", f"{total_distance:.1f} km")
+m2.metric("Duree", f"{total_duration:.0f} min")
+m3.metric("Seances", total_sessions)
+m4.metric("Moyenne hebdo", f"{avg_weekly:.1f} km")
 
 st.divider()
-
-fig_week = px.line(
+fig_weekly = px.line(
     weekly,
     x="week_start",
     y="distance_km",
-    markers=False,
-    title="Distance totale par semaine (toutes annees)",
-    template="plotly_dark",
+    markers=True,
+    title="Distance totale courue par semaine",
+    labels={"week_start": "Semaine", "distance_km": "Distance (km)"},
 )
-st.plotly_chart(fig_week, use_container_width=True)
+fig_weekly.update_traces(line=dict(color="#2f80ed", width=3), marker=dict(size=7))
+st.plotly_chart(fig_weekly, width="stretch")
 
-fig_month = px.line(
+fig_monthly = px.bar(
     monthly,
-    x="month_start",
+    x="month",
     y="distance_km",
     title="Distance totale par mois",
-    template="plotly_dark",
+    labels={"month": "Mois", "distance_km": "Distance (km)"},
 )
-st.plotly_chart(fig_month, use_container_width=True)
+fig_monthly.update_traces(marker_color="#2f80ed")
+st.plotly_chart(fig_monthly, width="stretch")
 
-fig_year = px.bar(
-    yearly,
-    x="year",
-    y="distance_km",
-    hover_data=["duration_min", "sessions"],
-    title="Distance totale par annee",
-    template="plotly_dark",
+zones = pd.DataFrame(
+    {
+        "zone": ["Z1", "Z2", "Z3", "Z4", "Z5"],
+        "minutes": [dt[f"z{i}_min"].sum() for i in range(1, 6)],
+    }
 )
-st.plotly_chart(fig_year, use_container_width=True)
-
-weekly["year"] = weekly["week_start"].dt.year
-weekly["week_in_year"] = weekly["week_start"].dt.isocalendar().week.astype(int)
-fig_by_year = px.line(
-    weekly,
-    x="week_in_year",
-    y="distance_km",
-    color="year",
-    title="Profil hebdomadaire compare par annee",
-    template="plotly_dark",
+fig_zones = px.bar(
+    zones,
+    x="zone",
+    y="minutes",
+    title="Temps par zone cardiaque",
+    labels={"zone": "Zone", "minutes": "Minutes"},
+    color="zone",
+    color_discrete_map={
+        "Z1": "#2ecc71",
+        "Z2": "#2f80ed",
+        "Z3": "#f2c94c",
+        "Z4": "#f2994a",
+        "Z5": "#eb5757",
+    },
 )
-st.plotly_chart(fig_by_year, use_container_width=True)
+st.plotly_chart(fig_zones, width="stretch")
