@@ -1,271 +1,227 @@
-# 🏃‍♂️🧠 Health Data Coach
+# Health Data Coach
 
-**Health Data Coach** est un projet de coach sportif intelligent basé sur les données **Apple Health**, combinant une application iOS et un backend Python pour analyser l’entraînement, dialoguer en langage naturel et formuler des recommandations personnalisées.
+Health Data Coach est un projet de coach sportif intelligent basé sur les données Apple Health.
 
----
+Le système combine :
 
-## 🎯 Objectif du projet
+- une app iOS SwiftUI qui lit HealthKit, affiche les données de course et synchronise les séances
+- un backend FastAPI qui stocke les données dans Neon, analyse l'entraînement et répond au chat
+- des modules de recommandation qui produisent des bilans et conseils prudents, explicables et contextualisés
 
-L’objectif n’est **pas** de prédire une performance ou une blessure, mais de :
+L'objectif n'est pas de prédire une performance ou une blessure. L'objectif est d'aider l'utilisateur à comprendre ses habitudes d'entraînement, suivre sa progression et recevoir des recommandations cohérentes.
 
-* aider l’utilisateur à **comprendre ses habitudes d’entraînement**,
-* fournir des **bilans clairs et contextualisés** (semaine, mois, année),
-* proposer des **recommandations cohérentes et prudentes**,
-* agir comme un **coach humain augmenté par les données**.
+## Architecture
 
-Le système est conçu pour être **explicable**, **progressif** et **robuste**, même avec des données personnelles limitées.
-
----
-
-## 🧩 Architecture globale
-
-Le projet repose sur deux briques principales :
-
+```text
+HealthCoach/
+├── HealthRunTracker/                  # Application iOS SwiftUI
+│   ├── README.md                      # Documentation dédiée à l'app
+│   └── HealthRunTracker/
+│       ├── App/                       # Entrée app, navigation, configuration API
+│       ├── Features/                  # Vues semaine, année, carte, chat
+│       ├── HealthKit/                 # Autorisations, lecture et agrégations Apple Health
+│       ├── Sync/                      # Export des séances vers le backend
+│       ├── Models/                    # Modèles Swift
+│       ├── Core/
+│       ├── Utils/
+│       └── Debug/
+│
+├── HealthCoachBackend/                # Backend Python FastAPI
+│   ├── api/                           # Routes REST
+│   ├── core/                          # Services, modèles SQLAlchemy, logique métier
+│   ├── execution/                     # Exécution des intentions détectées
+│   ├── intents/                       # Détection d'intention
+│   ├── normalization/                 # Résolution dates/périodes
+│   ├── recommendation/                # Recommandations et risque d'entraînement
+│   ├── routing/                       # Routage des requêtes
+│   ├── schemas/                       # Schémas API
+│   ├── verbalization/                 # Mise en langage des réponses
+│   ├── database.py                    # Connexion Neon/PostgreSQL
+│   └── main.py                        # Entrée FastAPI
+│
+└── README.md                          # Vue globale du projet
 ```
-Health Data Coach
-│
-├── HealthRunTracker/              # iOS application (SwiftUI)
-│   ├── HealthKit data access
-│   ├── Local data aggregation
-│   ├── Snapshot and CSV generation
-│   ├── Chat interface and visualizations
-│   └── Weekly, monthly, and yearly summaries
-│
-├── HealthCoachBackend/            # Python backend
-│   ├── FastAPI REST API
-│   ├── Intent detection and routing
-│   ├── Snapshot-based data analysis
-│   ├── Recommendation and coaching engine
-│   ├── Agent-based logic
-│   └── LLM integration (via Ollama)
-│
-└── models/                        # Trained machine learning models
-    └── Serialized models (joblib)
+
+Documentation spécifique à l'app iOS : [HealthRunTracker/README.md](HealthRunTracker/README.md)
+
+## Flux principal
+
+1. L'utilisateur ouvre l'app iOS sur son iPhone.
+2. L'app demande l'accès HealthKit si nécessaire.
+3. Les données semaine/année sont chargées localement.
+4. Les séances des 24 derniers mois sont synchronisées automatiquement vers le backend.
+5. Le backend stocke ou met à jour les séances dans Neon.
+6. Le chat interroge le backend pour produire des bilans, comparaisons, métriques et recommandations.
+
+La page de synchronisation manuelle côté app a été retirée : l'app s'ouvre directement sur la vue semaine.
+
+## Application iOS
+
+Technologies principales :
+
+- SwiftUI
+- HealthKit
+- MapKit
+- Charts
+- URLSession
+
+Fonctions principales :
+
+- lecture des workouts de course Apple Health
+- récupération des distances, durées, fréquences cardiaques, calories, dénivelé et traces GPS
+- calcul des zones cardiaques Z1 à Z5
+- vue semaine avec statistiques, graphe distance et zones cardiaques
+- vue année
+- vue carte des parcours
+- chat avec le coach backend
+- synchronisation automatique vers Neon via le backend
+
+Point important : HealthKit doit être testé sur un iPhone physique. Le simulateur ne donne pas accès aux vraies données Apple Health.
+
+## Backend
+
+Technologies principales :
+
+- FastAPI
+- SQLAlchemy
+- PostgreSQL via Neon
+- Pandas
+- scikit-learn
+- Ollama ou LLM local pour la verbalisation selon la configuration
+
+Routes importantes :
+
+- `GET /` : vérification simple du backend
+- `GET /health/db` : vérification de la connexion base de données
+- `POST /api/run-sessions/batch` : réception des séances envoyées par l'app iOS
+- routes de chat, snapshots, imports et signatures dans `HealthCoachBackend/api/`
+
+Au démarrage, le backend reconstruit certaines agrégations si nécessaire et lance aussi les tâches d'import CSV existantes.
+
+## Lancer le backend
+
+Depuis la racine du projet :
+
+```bash
+cd HealthCoachBackend
+venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
----
+L'app iOS doit pointer vers l'adresse IP locale du Mac dans :
 
-## 📱 HealthRunTracker (iOS)
+```text
+HealthRunTracker/HealthRunTracker/App/APIConfig.swift
+```
 
-**Technologies** : SwiftUI, HealthKit
+Exemple :
 
-Documentation dédiée : [`HealthRunTracker/README.md`](HealthRunTracker/README.md)
-
-### Rôle
-
-* Accès sécurisé aux données Apple Health
-* Extraction des séances de course
-* Agrégation hebdomadaire
-* Envoi des données vers le backend
-* Interface de chat avec le coach
-
-### Données collectées
-
-Par séance :
-
-* distance
-* durée
-* allure
-* zones d’intensité (Z1–Z5)
-
-Par semaine :
-
-* volume total
-* nombre de séances
-* durée cumulée
-* charge hebdomadaire
-
----
-
-## 🧠 HealthCoachBackend (Python)
-
-**Technologies** : FastAPI, Pandas, scikit-learn, LLM (via Ollama)
-
-### Modules principaux
-
-* **API REST** (FastAPI)
-* **Analyse temporelle** (semaine / mois / année)
-* **Chatbot NLP** avec routage strict
-* **Moteur de recommandation hybride**
-* **Gestion de mémoire conversationnelle**
-
----
-
-## 🤖 Chatbot NLP
-
-Le chatbot est piloté par un **moteur de décision strict** qui distingue :
-
-* small talk
-* questions factuelles
-* comparaisons temporelles
-* bilans
-* coaching long terme
-* recommandations
-
-👉 Le LLM ne décide jamais de la période ou du type de réponse : il **verbalise uniquement** des décisions structurées produites par le backend.
-
-### Exemples de requêtes gérées
-
-* "Combien de km cette semaine ?"
-* "Compare ce mois avec le mois dernier"
-* "Fais-moi un bilan"
-* "Suis-je régulier ?"
-* "Fais-moi une recommandation"
-
----
-
-## 📊 Moteur de recommandation
-
-Le moteur repose sur un pipeline **hybride et explicable** :
-
-### 1. Clustering des séances (micro)
-
-* KMeans (3 clusters)
-* Séances : easy / endurance / intensity
-
-### 2. Clustering des semaines (macro)
-
-* KMeans (3 clusters)
-* Profils de charge hebdomadaire
-
-### 3. Apprentissage de la structure des semaines
-
-* Distribution moyenne des types de séances par cluster de semaine
-* Génération de templates data-driven
-
-### 4. Score de risque (ML)
-
-* Régression logistique
-* Sortie probabiliste `risk_proba ∈ [0,1]`
-* Indicateur de vigilance (pas médical)
-
-### 5. Modulation par le risque
-
-* Réduction de l’intensité si risque élevé
-* Possibilité d’intensité si risque faible
-
-### 6. Ajustement temps réel
-
-* Retrait des séances déjà effectuées
-* Si semaine complète → planification semaine suivante
-
----
-
-## 📦 Sortie du moteur
-
-Le backend produit un objet structuré, par exemple :
-
-```json
-{
-  "target_sessions": 3,
-  "dominant_week_cluster": 1,
-  "avg_risk_last_3w": 0.61,
-  "risk_level": "moderate",
-  "base_plan": ["intensity", "easy", "endurance"],
-  "remaining_sessions": ["easy", "endurance"],
-  "week_complete": false
+```swift
+enum APIConfig {
+    static let baseURL = "http://192.168.1.165:8000"
 }
 ```
 
-Cet objet est ensuite **verbalisé par le LLM**, sans modification de la logique.
+Si l'adresse IP du Mac change, cette valeur doit être mise à jour avant de relancer l'app sur l'iPhone.
 
----
+## Lancer l'app iOS
 
-## 🧪 Philosophie du projet
+Depuis Xcode :
 
-* ✅ Pas de boîte noire
-* ✅ Pas de sur-optimisation
-* ✅ Décisions explicables
-* ✅ Séparation stricte logique / langage
-* ✅ Approche coach > prédicteur
+1. ouvrir `HealthRunTracker/HealthRunTracker.xcodeproj`
+2. sélectionner le scheme `HealthRunTracker`
+3. sélectionner l'iPhone physique
+4. lancer l'app
 
-Le système **corrige les habitudes** plutôt que de les reproduire aveuglément.
+Build en ligne de commande :
 
----
+```bash
+xcodebuild \
+  -project HealthRunTracker/HealthRunTracker.xcodeproj \
+  -scheme HealthRunTracker \
+  -configuration Debug \
+  -destination 'platform=iOS,id=00008120-00146C502210201E' \
+  build
+```
 
-## 🚧 Fonctionnalités en cours / à venir
-Several extensions could significantly enhance the current system, both in terms of intelligence and user experience.
+L'identifiant `00008120-00146C502210201E` correspond à l'iPhone utilisé actuellement. Il peut changer selon l'appareil.
 
-### 1. Integration of an External LLM (e.g. Mistral AI)
-One possible improvement would be to integrate an external Large Language Model such as Mistral AI, which offers a free-tier API.
-Objectives:
-- Improve the natural language quality of explanations and recommendations.
-- Generate more contextual, human-like coaching feedback.
-- Keep the core logic deterministic (risk computation, clustering, constraints) while delegating only the verbalization and reasoning to the LLM.
+## Synchronisation Neon
 
-Technical approach:
+La synchronisation est déclenchée automatiquement au lancement de l'app.
 
-- The backend would keep full control of:
-    - Training data
-    - Risk indicators
-    - Weekly statistics
-    - Business rules
+Côté iOS :
 
-- The LLM would only receive:
-    - Structured inputs (JSON)
-    - Strict prompts describing what it is allowed and forbidden to do
+- `HealthManager.startAutomaticSyncOnLaunch()` démarre le flux
+- `HealthManager.syncRecentRunSessionsOnLaunch()` collecte les 24 derniers mois
+- `HealthManager.prepareSessionsForExport(_:)` filtre les séances invalides
+- `RunSessionSyncService.uploadBatch(...)` envoie les lots au backend
 
-This separation ensures reliability, reproducibility, and avoids uncontrolled model behavior.
+Côté backend :
 
-### 2. Personalized Training Plan for Race Preparation
-Another major extension would be to build a long-term training plan generator designed to prepare a runner for a specific race (e.g. 10 km, half-marathon, marathon).
+- `POST /api/run-sessions/batch` reçoit les séances
+- la base Neon est utilisée comme source persistante
+- les signatures/snapshots sont invalidés lorsque les données changent
 
-User input questionnaire:
-- To generate such a plan, the user would be asked to provide:
-- Target race and race date
-- Current VMA (or estimated VMA)
-- Previous personal records (5 km, 10 km, half-marathon, etc.)
-- Training objective (finish, improve time, performance target)
-- Usual number of weekly sessions
-- Maximum acceptable number of sessions
-- Preferred training days (optional)
+Une synchronisation réussie se voit dans les logs backend avec :
 
-Plan generation logic:
-- The model would generate a progressive multi-week plan
-- Weekly volume would be based on:
-- The runner’s historical average distance
-- The runner’s current training frequency
-- Intensity distribution would follow safe progression rules
-- Key sessions (long run, intensity, recovery) would be scheduled consistently
+```text
+POST /api/run-sessions/batch HTTP/1.1 200 OK
+```
 
-Built-in safety alerts:
-- The system would automatically detect unrealistic or risky configurations, for example:
-- Requesting 5 sessions per week while the historical average is 3
-- A sudden increase in weekly distance beyond safe thresholds
-- Excessive intensity accumulation over consecutive weeks
+## Qualité des données exportées
 
-In such cases, the system would:
-- Warn the user
-- Propose a safer alternative
-- Explain the risk clearly
+Avant envoi, l'app ignore les séances incohérentes :
 
-### 3. Progressive Load and Distance Monitoring
-An additional improvement would be to introduce forward-looking load monitoring.
+- date future au-delà d'une petite tolérance
+- distance ou durée nulle
+- valeurs infinies ou non numériques
+- distance supérieure à 200 km
+- durée supérieure à 24 h
+- fréquence cardiaque moyenne hors plage plausible
+- dénivelé ou calories incohérents
 
-Features:
-- Track expected weekly distance for upcoming weeks
-- Compare projected load with the runner’s historical baseline
-- Visualize gradual progression (or detect abrupt changes)
-- Adjust recommendations dynamically based on real completed sessions
+Cette étape protège la base Neon contre les exports corrompus ou incomplets.
 
-This would allow:
-- Better anticipation of overtraining risk
-- Smarter long-term progression
-- More adaptive training plans
+## Chat et recommandations
 
-### 4. Persistent Data Storage with a Lightweight Database
-Currently, data is processed from CSV files, which is sufficient for prototyping but not optimal for scaling.
+Le backend garde la logique métier structurée :
 
-Proposed improvement:
-- Introduce a lightweight, free-tier database (e.g. SQLite, PostgreSQL free tier, or cloud-based free services)
+- détection d'intention
+- résolution de période
+- extraction des métriques
+- comparaison entre périodes
+- bilan d'entraînement
+- recommandation prudente
+- verbalisation finale
 
-Benefits:
-- Faster access to historical data
-- Easier session and week aggregation
-- Persistent user profiles and training history
-- Better performance for repeated queries and recommendations
+Le LLM ne doit pas décider seul des métriques ou de la période. Il transforme une décision structurée en réponse lisible.
 
-This would also enable:
-- Multi-user support
-- Long-term tracking
-- More advanced analytics without recomputing everything from scratch
+Exemples de requêtes :
+
+- "Combien de km cette semaine ?"
+- "Compare ce mois avec le mois dernier"
+- "Fais-moi un bilan"
+- "Suis-je régulier ?"
+- "Fais-moi une recommandation"
+
+## Vérification rapide
+
+1. Lancer le backend.
+2. Vérifier `GET /health/db`.
+3. Mettre à jour `APIConfig.baseURL` si besoin.
+4. Compiler et lancer l'app sur l'iPhone.
+5. Accepter HealthKit.
+6. Vérifier que l'app s'ouvre sur la vue semaine.
+7. Vérifier dans les logs backend que `/api/run-sessions/batch` retourne `200 OK`.
+8. Tester le graphe de zones cardiaques dans la vue semaine.
+9. Tester une question dans le chat.
+
+## Principes du projet
+
+- logique explicable plutôt que boîte noire
+- séparation entre données, décisions et verbalisation
+- prudence dans les recommandations sportives
+- priorité aux données réelles Apple Health
+- synchronisation automatique mais filtrée avant export
+- backend comme source persistante via Neon
+
