@@ -23,11 +23,25 @@ struct ContentView: View {
                         sessionCount: healthManager.weeklyData.count
                     )
 
+                    TrainingLoadGaugeView(
+                        sevenDayLoad: healthManager.sevenDayLoad,
+                        twentyEightDayLoad: healthManager.twentyEightDayLoad,
+                        loadRatio: healthManager.loadRatio
+                    )
+
                     WeekChartView(
                         weeklyData: healthManager.weeklyData,
                         onSelect: { session in
                             selectedSession = session
                         }
+                    )
+
+                    WeeklyIntensitySummaryView(
+                        sessions: healthManager.weeklyData
+                    )
+
+                    PaceHeartRateScatterView(
+                        sessions: healthManager.weeklyData
                     )
 
                     WeekHRZoneChartView(

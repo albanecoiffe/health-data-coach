@@ -238,6 +238,8 @@ struct YearContent: View {
                     }
                 }
 
+                MonthlyTrainingMixView(monthlyData: healthManager.yearlyData)
+
                 // ====== Heatmap annuel ======
                 VStack(alignment: .leading, spacing: 12) {
                     Text("📅 Heatmap – Régularité")
@@ -305,6 +307,8 @@ struct YearContent: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 10)
+
+                WeeklyVolumeTrendView(weeklyData: weeklyDistanceData)
 
                 // ====== Graphique hebdomadaire ======
                 VStack(alignment: .leading, spacing: 10) {
