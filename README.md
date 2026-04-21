@@ -44,6 +44,8 @@ HealthCoach/
 
 Documentation spécifique à l'app iOS : [HealthRunTracker/README.md](HealthRunTracker/README.md)
 
+Documentation spécifique au backend Python : [HealthCoachBackend/README.md](HealthCoachBackend/README.md)
+
 ## Flux principal
 
 1. L'utilisateur ouvre l'app iOS sur son iPhone.
@@ -94,7 +96,7 @@ Routes importantes :
 - `GET /` : vérification simple du backend
 - `GET /health/db` : vérification de la connexion base de données
 - `POST /api/run-sessions/batch` : réception des séances envoyées par l'app iOS
-- routes de chat, snapshots, imports et signatures dans `HealthCoachBackend/api/`
+- routes de chat, imports, séances et signatures dans `HealthCoachBackend/api/`
 
 Au démarrage, le backend reconstruit certaines agrégations si nécessaire et lance aussi les tâches d'import CSV existantes.
 
@@ -160,7 +162,7 @@ Côté backend :
 
 - `POST /api/run-sessions/batch` reçoit les séances
 - la base Neon est utilisée comme source persistante
-- les signatures/snapshots sont invalidés lorsque les données changent
+- les signatures sont invalidées lorsque les données changent
 
 Une synchronisation réussie se voit dans les logs backend avec :
 
@@ -224,4 +226,3 @@ Exemples de requêtes :
 - priorité aux données réelles Apple Health
 - synchronisation automatique mais filtrée avant export
 - backend comme source persistante via Neon
-
