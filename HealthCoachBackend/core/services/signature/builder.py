@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from datetime import timedelta, date
 
 from core.models.RunSession import RunSession
+from core.heart_rate_zones import high_intensity_minutes, low_intensity_minutes
 from schemas.signature import (
     RunnerSignature,
     SignaturePeriod,
@@ -113,11 +114,12 @@ def build_runner_signature(db: Session, user_id) -> RunnerSignature:
     completed_sessions = [s for w in completed_weeks.values() for s in w]
 
     z4z5_ratios = [
-        (s.z4_min + s.z5_min) / max(s.duration_min, 1) for s in completed_sessions
+        high_intensity_minutes(s) / max(s.duration_min, 1)
+        for s in completed_sessions
     ]
 
     z1z3_ratios = [
-        (s.z1_min + s.z2_min + s.z3_min) / max(s.duration_min, 1)
+        low_intensity_minutes(s) / max(s.duration_min, 1)
         for s in completed_sessions
     ]
 
@@ -132,7 +134,8 @@ def build_runner_signature(db: Session, user_id) -> RunnerSignature:
     # --------------------------------------------------
     weekly_loads = [
         sum(
-            s.duration_min * (1 + 2 * ((s.z4_min + s.z5_min) / max(s.duration_min, 1)))
+            s.duration_min
+            * (1 + 2 * (high_intensity_minutes(s) / max(s.duration_min, 1)))
             for s in w
         )
         for w in completed_weeks.values()

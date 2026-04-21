@@ -38,13 +38,9 @@ final class HealthManager: ObservableObject {
     @Published var sevenDayLoad: Double = 0
     @Published var twentyEightDayLoad: Double = 0
     @Published var loadRatio: Double = 0
-    @Published var weeklyHRZones: [String: Double] = [
-        "Z1": 0,
-        "Z2": 0,
-        "Z3": 0,
-        "Z4": 0,
-        "Z5": 0
-    ]
+    @Published var weeklyHRZones: [String: Double] = Dictionary(
+        uniqueKeysWithValues: HeartRateZones.definitions.map { ($0.label, 0.0) }
+    )
     @Published var weeklyZoneArray: [HeartRateZoneData] = []
     @Published var syncStatusText: String = "Idle"
     @Published var syncInsertedCount: Int = 0

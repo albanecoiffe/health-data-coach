@@ -1,16 +1,6 @@
 import Charts
 import SwiftUI
 
-func zoneColor(bpm: Double) -> Color {
-    switch bpm {
-    case ..<145: return .blue
-    case 145..<159: return .teal
-    case 159..<173: return .green
-    case 173..<186: return .orange
-    default: return .red
-    }
-}
-
 struct HeartRateTimelineChart: View {
     let samples: [HeartRateSample]
     @State private var showFullSession = false
@@ -44,7 +34,7 @@ struct HeartRateTimelineChart: View {
                         x: .value("Temps", sample.timeOffset),
                         y: .value("BPM", sample.bpm)
                     )
-                    .foregroundStyle(zoneColor(bpm: sample.bpm))
+                    .foregroundStyle(HeartRateZones.color(for: sample.bpm))
                     .interpolationMethod(.linear)
                 }
             }

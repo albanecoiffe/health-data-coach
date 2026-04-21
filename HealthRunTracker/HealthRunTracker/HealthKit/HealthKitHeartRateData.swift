@@ -45,13 +45,13 @@ extension HealthManager {
                 let dt = s2.startDate.timeIntervalSince(s1.startDate) / 60.0  // minutes
                 
                 switch hr {
-                case ..<HRZones.z1Upper:
+                case ..<HeartRateZones.z1Upper:
                     z1 += dt
-                case HRZones.z1Upper..<HRZones.z2Upper:
+                case HeartRateZones.z1Upper..<HeartRateZones.z2Upper:
                     z2 += dt
-                case HRZones.z2Upper..<HRZones.z3Upper:
+                case HeartRateZones.z2Upper..<HeartRateZones.z3Upper:
                     z3 += dt
-                case HRZones.z3Upper..<HRZones.z4Upper:
+                case HeartRateZones.z3Upper..<HeartRateZones.z4Upper:
                     z4 += dt
                 default:
                     z5 += dt

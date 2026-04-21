@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+
+from core.heart_rate_zones import high_intensity_minutes, low_intensity_minutes
 from core.models.RunSession import RunSession
 
 
@@ -14,19 +16,13 @@ def load_run_sessions(db: Session, user_id):
         distance = float(s.distance_km) if s.distance_km else 0.0
         duration = float(s.duration_min) if s.duration_min else 0.0
 
-        z1 = float(s.z1_min) if s.z1_min else 0.0
-        z2 = float(s.z2_min) if s.z2_min else 0.0
-        z3 = float(s.z3_min) if s.z3_min else 0.0
-        z4 = float(s.z4_min) if s.z4_min else 0.0
-        z5 = float(s.z5_min) if s.z5_min else 0.0
-
         # -----------------------------
         # 2️⃣ Features dérivées
         # -----------------------------
         pace = (duration / distance) if distance > 0 and duration > 0 else None
 
-        low_pct = (z1 + z2 + z3) / duration if duration > 0 else 0.0
-        high_pct = (z4 + z5) / duration if duration > 0 else 0.0
+        low_pct = low_intensity_minutes(s) / duration if duration > 0 else 0.0
+        high_pct = high_intensity_minutes(s) / duration if duration > 0 else 0.0
 
         out.append(
             {

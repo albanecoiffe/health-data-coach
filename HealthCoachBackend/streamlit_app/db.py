@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -6,8 +7,16 @@ import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-
 _ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from core.heart_rate_zones import (
+    HIGH_INTENSITY_ZONE_IDS,
+    LOW_INTENSITY_ZONE_IDS,
+    zone_columns,
+)
+
 load_dotenv(_ROOT / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -33,11 +42,7 @@ def _normalize_sessions(df: pd.DataFrame) -> pd.DataFrame:
         "avg_hr",
         "elevation_m",
         "active_kcal",
-        "z1_min",
-        "z2_min",
-        "z3_min",
-        "z4_min",
-        "z5_min",
+        *zone_columns(),
     )
     for col in numeric_cols:
         if col not in df.columns:
@@ -48,8 +53,8 @@ def _normalize_sessions(df: pd.DataFrame) -> pd.DataFrame:
     distance_safe = df["distance_km"].replace(0, pd.NA)
     df["pace_min_per_km"] = (duration_safe / distance_safe).fillna(0.0)
 
-    z_low = df["z1_min"] + df["z2_min"] + df["z3_min"]
-    z_high = df["z4_min"] + df["z5_min"]
+    z_low = df[zone_columns(LOW_INTENSITY_ZONE_IDS)].sum(axis=1)
+    z_high = df[zone_columns(HIGH_INTENSITY_ZONE_IDS)].sum(axis=1)
     z_total_safe = (z_low + z_high).replace(0, pd.NA)
     df["low_intensity_pct"] = (z_low / z_total_safe).fillna(0.0)
     df["high_intensity_pct"] = (z_high / z_total_safe).fillna(0.0)

@@ -1,3 +1,10 @@
+from core.heart_rate_zones import (
+    HEART_RATE_ZONES,
+    high_intensity_minutes,
+    zone_minutes,
+)
+
+
 def compute_totals(sessions):
     total_distance = sum(s.distance_km for s in sessions)
     total_duration = sum(s.duration_min for s in sessions)
@@ -16,31 +23,23 @@ def compute_totals(sessions):
 
 
 def compute_zones_percent(sessions):
-    z1 = sum(s.z1_min for s in sessions)
-    z2 = sum(s.z2_min for s in sessions)
-    z3 = sum(s.z3_min for s in sessions)
-    z4 = sum(s.z4_min for s in sessions)
-    z5 = sum(s.z5_min for s in sessions)
-
-    total = z1 + z2 + z3 + z4 + z5
+    totals = {
+        zone.id: sum(zone_minutes(s, (zone.id,)) for s in sessions)
+        for zone in HEART_RATE_ZONES
+    }
+    total = sum(totals.values())
 
     if total == 0:
         return {}
 
-    return {
-        "z1": z1 / total,
-        "z2": z2 / total,
-        "z3": z3 / total,
-        "z4": z4 / total,
-        "z5": z5 / total,
-    }
+    return {zone_id: minutes / total for zone_id, minutes in totals.items()}
 
 
 def compute_training_load(sessions):
     load = 0.0
 
     for s in sessions:
-        intense_ratio = (s.z4_min + s.z5_min) / max(s.duration_min, 1)
+        intense_ratio = high_intensity_minutes(s) / max(s.duration_min, 1)
         load += s.duration_min * (1 + 2 * intense_ratio)
 
     return load

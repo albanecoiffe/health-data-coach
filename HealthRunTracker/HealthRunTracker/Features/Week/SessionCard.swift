@@ -62,33 +62,31 @@ struct SessionCard: View {
     }
 
     private var totalZoneTime: Double {
-        session.z1 + session.z2 + session.z3 + session.z4 + session.z5
+        HeartRateZones.totalMinutes(for: session)
     }
 
     private var lowIntensityPercent: Double {
         guard totalZoneTime > 0 else { return 0 }
-        return (session.z1 + session.z2 + session.z3) / totalZoneTime * 100
+        return HeartRateZones.lowIntensityMinutes(for: session) / totalZoneTime * 100
     }
 
     private var highIntensityPercent: Double {
         guard totalZoneTime > 0 else { return 0 }
-        return (session.z4 + session.z5) / totalZoneTime * 100
+        return HeartRateZones.highIntensityMinutes(for: session) / totalZoneTime * 100
     }
 
     private var zones: some View {
         VStack(spacing: 8) {
             VStack(spacing: 4) {
-                zoneRow("Z1", session.z1, .green)
-                zoneRow("Z2", session.z2, .blue)
-                zoneRow("Z3", session.z3, .yellow)
-                zoneRow("Z4", session.z4, .orange)
-                zoneRow("Z5", session.z5, .red)
+                ForEach(HeartRateZones.values(for: session), id: \.zone.id) { item in
+                    zoneRow(item.zone, item.minutes)
+                }
             }
 
             Divider().background(.white.opacity(0.1))
 
-            intensityRow("Low intensity (Z1–Z3)", lowIntensityPercent, .green)
-            intensityRow("High intensity (Z4–Z5)", highIntensityPercent, .red)
+            intensityRow(HeartRateZones.lowIntensityTitle, lowIntensityPercent, .green)
+            intensityRow(HeartRateZones.highIntensityTitle, highIntensityPercent, .red)
         }
     }
 
@@ -114,14 +112,14 @@ struct SessionCard: View {
     }
 
     @ViewBuilder
-    private func zoneRow(_ name: String, _ value: Double, _ color: Color) -> some View {
+    private func zoneRow(_ zone: HeartRateZoneDefinition, _ value: Double) -> some View {
         if value > 0 {
             HStack {
-                Text("\(name) :")
+                Text("\(zone.label) (\(zone.rangeText)) :")
                     .foregroundColor(.gray)
                 Spacer()
                 Text(String(format: "%.1f min", value))
-                    .foregroundColor(color)
+                    .foregroundColor(zone.color)
             }
         }
     }
