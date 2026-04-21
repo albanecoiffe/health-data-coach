@@ -58,7 +58,7 @@ Example:
 Retourne EXACTEMENT :
 - "intent": "SMALL_TALK",
 
-- Tu n’as PAS le droit de demander un snapshot dans ce cas.
+- Tu n’as PAS le droit de demander des données supplémentaires dans ce cas.
 
 - Si la phrase contient un indicateur quantitatif
     (distance, km, temps, durée, séance, nombre),

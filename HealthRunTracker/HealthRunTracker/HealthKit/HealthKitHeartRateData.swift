@@ -59,12 +59,6 @@ extension HealthManager {
                 
             }
             
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "fr_FR")
-            formatter.dateFormat = "E"
-            
-            let label = formatter.string(from: workout.startDate)
-            
             completion(
                 SessionZoneBreakdown(
                     workoutStart: workout.startDate,

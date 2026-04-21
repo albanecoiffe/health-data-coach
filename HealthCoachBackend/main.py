@@ -8,7 +8,6 @@ from api.errors import validation_exception_handler
 from api.health import router as health_router
 from api.runs import router as runs_router
 from api.signature import router as signature_router
-from api.snapshots import router as snapshots_router
 from core.services.imports.sessions_csv import (
     auto_import_sessions_on_startup,
     start_csv_polling_worker,
@@ -33,7 +32,6 @@ def create_app() -> FastAPI:
 
     app.include_router(chat_router)
     app.include_router(health_router)
-    app.include_router(snapshots_router)
     app.include_router(runs_router)
     app.include_router(imports_router)
     app.include_router(imports_apple_router)
