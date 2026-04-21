@@ -64,17 +64,17 @@ struct HRZoneBarChart: View {
     let session: DailyRunData
 
     private var totalZoneTime: Double {
-        session.z1 + session.z2 + session.z3 + session.z4 + session.z5
+        HeartRateZones.totalMinutes(for: session)
     }
 
     private var lowIntensityPct: Double {
         guard totalZoneTime > 0 else { return 0 }
-        return (session.z1 + session.z2 + session.z3) / totalZoneTime * 100
+        return HeartRateZones.lowIntensityMinutes(for: session) / totalZoneTime * 100
     }
 
     private var highIntensityPct: Double {
         guard totalZoneTime > 0 else { return 0 }
-        return (session.z4 + session.z5) / totalZoneTime * 100
+        return HeartRateZones.highIntensityMinutes(for: session) / totalZoneTime * 100
     }
 
     var body: some View {
@@ -83,17 +83,16 @@ struct HRZoneBarChart: View {
                 .font(.headline)
                 .foregroundColor(.white)
 
+            HeartRateZoneLegend()
+
             Chart {
-                BarMark(x: .value("Zone", "Z1"), y: .value("Min", session.z1))
-                    .foregroundStyle(.green)
-                BarMark(x: .value("Zone", "Z2"), y: .value("Min", session.z2))
-                    .foregroundStyle(.blue)
-                BarMark(x: .value("Zone", "Z3"), y: .value("Min", session.z3))
-                    .foregroundStyle(.yellow)
-                BarMark(x: .value("Zone", "Z4"), y: .value("Min", session.z4))
-                    .foregroundStyle(.orange)
-                BarMark(x: .value("Zone", "Z5"), y: .value("Min", session.z5))
-                    .foregroundStyle(.red)
+                ForEach(HeartRateZones.values(for: session), id: \.zone.id) { item in
+                    BarMark(
+                        x: .value("Zone", item.zone.label),
+                        y: .value("Min", item.minutes)
+                    )
+                    .foregroundStyle(item.zone.color)
+                }
             }
             .frame(height: 180)
 
@@ -101,7 +100,7 @@ struct HRZoneBarChart: View {
 
             HStack {
                 VStack(alignment: .leading) {
-                    Text("Low intensity (Z1–Z3)")
+                    Text(HeartRateZones.lowIntensityTitle)
                         .foregroundColor(.gray)
                     Text(String(format: "%.0f %%", lowIntensityPct))
                         .font(.headline.bold())
@@ -111,7 +110,7 @@ struct HRZoneBarChart: View {
                 Spacer()
 
                 VStack(alignment: .leading) {
-                    Text("High intensity (Z4–Z5)")
+                    Text(HeartRateZones.highIntensityTitle)
                         .foregroundColor(.gray)
                     Text(String(format: "%.0f %%", highIntensityPct))
                         .font(.headline.bold())

@@ -2,16 +2,6 @@ import Foundation
 import HealthKit
 
 struct HealthMetricsCalculator {
-
-    enum HeartRateZones {
-        // Ranges used:
-        // Z1: <145, Z2: 145-158, Z3: 159-172, Z4: 173-185, Z5: >=186
-        static let z1Upper = 145.0
-        static let z2Upper = 159.0
-        static let z3Upper = 173.0
-        static let z4Upper = 186.0
-    }
-
     static func computeZones(
         samples: [(bpm: Double, deltaMin: Double)]
     ) -> (z1: Double, z2: Double, z3: Double, z4: Double, z5: Double) {

@@ -14,9 +14,9 @@ struct RunSessionDebugTools {
         formatter.dateFormat = "yyyy-MM-dd"
 
         for s in sessions {
-            let total = s.z1 + s.z2 + s.z3 + s.z4 + s.z5
-            let lowPct = total > 0 ? (s.z1 + s.z2 + s.z3) / total : 0
-            let highPct = total > 0 ? (s.z4 + s.z5) / total : 0
+            let total = HeartRateZones.totalMinutes(for: s)
+            let lowPct = total > 0 ? HeartRateZones.lowIntensityMinutes(for: s) / total : 0
+            let highPct = total > 0 ? HeartRateZones.highIntensityMinutes(for: s) / total : 0
             let pace = s.distanceKm > 0 ? s.durationMin / s.distanceKm : 0
 
             csv +=

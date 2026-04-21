@@ -4,18 +4,12 @@ import SwiftUI
 struct WeekHRZoneChartView: View {
     let sessions: [SessionZoneBreakdown]
 
-    private var totals: [(zone: String, value: Double, color: Color)] {
-        [
-            ("Z1", sessions.map(\.z1).reduce(0, +), .green),
-            ("Z2", sessions.map(\.z2).reduce(0, +), .blue),
-            ("Z3", sessions.map(\.z3).reduce(0, +), .yellow),
-            ("Z4", sessions.map(\.z4).reduce(0, +), .orange),
-            ("Z5", sessions.map(\.z5).reduce(0, +), .red)
-        ]
+    private var totals: [(zone: HeartRateZoneDefinition, minutes: Double)] {
+        HeartRateZones.weeklyTotals(from: sessions)
     }
 
     private var totalZoneTime: Double {
-        totals.map(\.value).reduce(0, +)
+        totals.map(\.minutes).reduce(0, +)
     }
 
     var body: some View {
@@ -24,6 +18,8 @@ struct WeekHRZoneChartView: View {
                 .font(.title3.bold())
                 .foregroundColor(.white)
                 .padding(.leading, 8)
+
+            HeartRateZoneLegend()
 
             if sessions.isEmpty {
                 Text("Aucune donnée cette semaine")
@@ -35,12 +31,12 @@ struct WeekHRZoneChartView: View {
                     .padding()
             } else {
                 Chart {
-                    ForEach(totals, id: \.zone) { item in
+                    ForEach(totals, id: \.zone.id) { item in
                         BarMark(
-                            x: .value("Zone", item.zone),
-                            y: .value("Minutes", item.value)
+                            x: .value("Zone", item.zone.label),
+                            y: .value("Minutes", item.minutes)
                         )
-                        .foregroundStyle(item.color)
+                        .foregroundStyle(item.zone.color)
                     }
                 }
                 .frame(height: 240)

@@ -6,6 +6,12 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from db import load_sessions_between, resolve_user_id
+from core.heart_rate_zones import (
+    HEART_RATE_ZONES,
+    zone_color_map,
+    zone_column_labels,
+    zone_ranges_rows,
+)
 
 
 st.set_page_config(page_title="Analyse Semaine", layout="wide")
@@ -40,18 +46,10 @@ def zone_breakdown_by_session(df):
     sessions["session_label"] = sessions["start_time"].dt.strftime("%a %d/%m %H:%M")
     return sessions.melt(
         id_vars=["session_label"],
-        value_vars=[f"z{i}_min" for i in range(1, 6)],
+        value_vars=[zone.column for zone in HEART_RATE_ZONES],
         var_name="zone",
         value_name="minutes",
-    ).replace(
-        {
-            "z1_min": "Z1",
-            "z2_min": "Z2",
-            "z3_min": "Z3",
-            "z4_min": "Z4",
-            "z5_min": "Z5",
-        }
-    )
+    ).replace(zone_column_labels())
 
 
 if "week_offset" not in st.session_state:
@@ -102,6 +100,9 @@ fig_distance = px.bar(
 fig_distance.update_traces(marker_color="#2f80ed")
 st.plotly_chart(fig_distance, width="stretch")
 
+st.subheader("Zones cardiaques")
+st.dataframe(pd.DataFrame(zone_ranges_rows()), width="stretch", hide_index=True)
+
 zones = zone_breakdown_by_session(df)
 fig_zones = px.bar(
     zones,
@@ -110,13 +111,7 @@ fig_zones = px.bar(
     color="zone",
     title="Zones cardiaques (min par seance)",
     labels={"session_label": "Seance", "minutes": "Minutes", "zone": "Zone"},
-    color_discrete_map={
-        "Z1": "#2ecc71",
-        "Z2": "#2f80ed",
-        "Z3": "#f2c94c",
-        "Z4": "#f2994a",
-        "Z5": "#eb5757",
-    },
+    color_discrete_map=zone_color_map(),
 )
 fig_zones.update_layout(barmode="stack")
 st.plotly_chart(fig_zones, width="stretch")

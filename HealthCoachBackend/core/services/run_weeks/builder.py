@@ -3,6 +3,7 @@ from datetime import timedelta, date
 
 from core.models.RunSession import RunSession
 from core.models.RunWeek import RunWeek
+from core.heart_rate_zones import high_intensity_minutes, low_intensity_minutes
 from database import SessionLocal
 
 
@@ -41,8 +42,8 @@ def build_run_weeks(db: Session, user_id):
         total_distance = sum(r.distance_km for r in runs)
         total_duration = sum(r.duration_min for r in runs)
 
-        z1z3 = sum((r.z1_min + r.z2_min + r.z3_min) for r in runs)
-        z4z5 = sum((r.z4_min + r.z5_min) for r in runs)
+        z1z3 = sum(low_intensity_minutes(r) for r in runs)
+        z4z5 = sum(high_intensity_minutes(r) for r in runs)
 
         z_total = z1z3 + z4z5
 
@@ -50,7 +51,8 @@ def build_run_weeks(db: Session, user_id):
         z1z3_pct = 1.0 - z4z5_pct
 
         avg_load = sum(
-            r.duration_min * (1 + 2 * ((r.z4_min + r.z5_min) / max(r.duration_min, 1)))
+            r.duration_min
+            * (1 + 2 * (high_intensity_minutes(r) / max(r.duration_min, 1)))
             for r in runs
         )
 

@@ -3,6 +3,7 @@ import plotly.express as px
 import streamlit as st
 
 from db import load_all_sessions, resolve_user_id
+from core.heart_rate_zones import HEART_RATE_ZONES, zone_color_map, zone_ranges_rows
 
 
 st.set_page_config(page_title="Analyse Totale", layout="wide")
@@ -81,10 +82,13 @@ fig_monthly = px.bar(
 fig_monthly.update_traces(marker_color="#2f80ed")
 st.plotly_chart(fig_monthly, width="stretch")
 
+st.subheader("Zones cardiaques")
+st.dataframe(pd.DataFrame(zone_ranges_rows()), width="stretch", hide_index=True)
+
 zones = pd.DataFrame(
     {
-        "zone": ["Z1", "Z2", "Z3", "Z4", "Z5"],
-        "minutes": [dt[f"z{i}_min"].sum() for i in range(1, 6)],
+        "zone": [zone.label for zone in HEART_RATE_ZONES],
+        "minutes": [dt[zone.column].sum() for zone in HEART_RATE_ZONES],
     }
 )
 fig_zones = px.bar(
@@ -94,12 +98,6 @@ fig_zones = px.bar(
     title="Temps par zone cardiaque",
     labels={"zone": "Zone", "minutes": "Minutes"},
     color="zone",
-    color_discrete_map={
-        "Z1": "#2ecc71",
-        "Z2": "#2f80ed",
-        "Z3": "#f2c94c",
-        "Z4": "#f2994a",
-        "Z5": "#eb5757",
-    },
+    color_discrete_map=zone_color_map(),
 )
 st.plotly_chart(fig_zones, width="stretch")
