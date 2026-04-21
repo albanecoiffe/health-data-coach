@@ -22,7 +22,7 @@ def analyze_regularity(signature: dict) -> dict:
     }
 
 
-def analyze_volume(snapshot: dict, signature: dict) -> dict:
+def analyze_volume(summary: dict, signature: dict) -> dict:
     """
     Analyse le volume récent par rapport à l'habitude long-terme.
     """
@@ -33,7 +33,7 @@ def analyze_volume(snapshot: dict, signature: dict) -> dict:
     weekly_std_km = volume_sig.get("weekly_std_km")
     trend_12w_pct = volume_sig.get("trend_12w_pct")
 
-    current_week_km = snapshot.get("total_distance_km")
+    current_week_km = summary.get("total_distance_km")
 
     if weekly_avg_km is None or current_week_km is None:
         return {}
@@ -50,7 +50,7 @@ def analyze_volume(snapshot: dict, signature: dict) -> dict:
     }
 
 
-def analyze_load(snapshot: dict, signature: dict) -> dict:
+def analyze_load(summary: dict, signature: dict) -> dict:
     """
     Analyse la charge récente par rapport à la charge habituelle.
     """
@@ -62,7 +62,7 @@ def analyze_load(snapshot: dict, signature: dict) -> dict:
     acwr_avg = load_sig.get("acwr_avg")
     acwr_max = load_sig.get("acwr_max")
 
-    current_week_load = snapshot.get("total_load")
+    current_week_load = summary.get("total_load")
 
     if weekly_avg_load is None or current_week_load is None:
         return {}
