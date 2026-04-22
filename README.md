@@ -39,6 +39,9 @@ HealthCoach/
 │   ├── database.py                    # Connexion Neon/PostgreSQL
 │   └── main.py                        # Entrée FastAPI
 │
+├── scripts/
+│   └── dev_phone.sh                   # Lance backend + build + installation iPhone
+│
 └── README.md                          # Vue globale du projet
 ```
 
@@ -51,7 +54,7 @@ Documentation spécifique au backend Python : [HealthCoachBackend/README.md](Hea
 1. L'utilisateur ouvre l'app iOS sur son iPhone.
 2. L'app demande l'accès HealthKit si nécessaire.
 3. Les données semaine/année sont chargées localement.
-4. Les séances des 24 derniers mois sont synchronisées automatiquement vers le backend.
+4. L'app demande au backend la dernière séance connue, puis synchronise seulement les nouveautés.
 5. Le backend stocke ou met à jour les séances dans Neon.
 6. Le chat interroge le backend pour produire des bilans, comparaisons, métriques et recommandations.
 
@@ -100,7 +103,25 @@ Routes importantes :
 
 Au démarrage, le backend reconstruit certaines agrégations si nécessaire et lance aussi les tâches d'import CSV existantes.
 
-## Lancer le backend
+## Lancer l'environnement iPhone
+
+Depuis la racine du projet, la commande la plus simple est :
+
+```bash
+./scripts/dev_phone.sh
+```
+
+Elle automatise le flux de développement local :
+
+- redémarre le backend sur `0.0.0.0:8000`
+- vérifie `http://MacBook-Pro-de-Albane.local:8000/health/db`
+- build l'app iOS en Debug
+- installe l'app sur l'iPhone connecté
+- lance l'app
+
+Le script utilise `/tmp/HealthCoachDerivedData` pour éviter les erreurs de signature liées aux dossiers iCloud.
+
+## Lancer le backend seul
 
 Depuis la racine du projet :
 
@@ -109,21 +130,21 @@ cd HealthCoachBackend
 venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-L'app iOS doit pointer vers l'adresse IP locale du Mac dans :
+L'app iOS pointe vers le nom local stable du Mac dans :
 
 ```text
 HealthRunTracker/HealthRunTracker/App/APIConfig.swift
 ```
 
-Exemple :
+Configuration actuelle :
 
 ```swift
 enum APIConfig {
-    static let baseURL = "http://192.168.1.165:8000"
+    static let baseURL = "http://MacBook-Pro-de-Albane.local:8000"
 }
 ```
 
-Si l'adresse IP du Mac change, cette valeur doit être mise à jour avant de relancer l'app sur l'iPhone.
+Cela évite de modifier l'app quand l'adresse IP Wi-Fi du Mac change.
 
 ## Lancer l'app iOS
 
@@ -149,20 +170,22 @@ L'identifiant `00008120-00146C502210201E` correspond à l'iPhone utilisé actuel
 
 ## Synchronisation Neon
 
-La synchronisation est déclenchée automatiquement au lancement de l'app.
+La synchronisation est déclenchée automatiquement au lancement de l'app et quand l'app redevient active.
 
 Côté iOS :
 
 - `HealthManager.startAutomaticSyncOnLaunch()` démarre le flux
-- `HealthManager.syncRecentRunSessionsOnLaunch()` collecte les 24 derniers mois
+- `RunSessionSyncService.fetchLatestSessionStartTime(...)` lit la dernière séance stockée
+- `HealthManager.syncLatestRunSessions()` collecte seulement les séances récentes, avec une marge de deux jours
 - `HealthManager.prepareSessionsForExport(_:)` filtre les séances invalides
 - `RunSessionSyncService.uploadBatch(...)` envoie les lots au backend
 
 Côté backend :
 
+- `GET /api/run-sessions/latest` retourne la dernière séance connue
 - `POST /api/run-sessions/batch` reçoit les séances
 - la base Neon est utilisée comme source persistante
-- les signatures sont invalidées lorsque les données changent
+- les signatures sont invalidées seulement lorsque les données changent réellement
 
 Une synchronisation réussie se voit dans les logs backend avec :
 

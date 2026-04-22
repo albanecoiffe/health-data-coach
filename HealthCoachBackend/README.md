@@ -43,7 +43,17 @@ Variables importantes :
 
 Ne pas remettre de token Hugging Face dans `.env` si le projet ne l'utilise pas.
 
-## Lancer le backend
+## Lancer l'environnement iPhone
+
+Depuis la racine du projet :
+
+```bash
+./scripts/dev_phone.sh
+```
+
+Cette commande redemarre le backend, verifie la connexion DB, build l'app iOS, l'installe sur l'iPhone connecte et la lance.
+
+## Lancer le backend seul
 
 Depuis la racine du projet :
 
@@ -55,10 +65,9 @@ venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
 URLs utiles :
 
 - `http://localhost:8000` depuis le Mac
-- `http://IP_DU_MAC:8000` depuis l'iPhone
-- exemple actuel : `http://192.168.1.165:8000`
+- `http://MacBook-Pro-de-Albane.local:8000` depuis l'iPhone
 
-L'app iOS doit utiliser la meme adresse dans :
+L'app iOS utilise la meme adresse dans :
 
 ```text
 HealthRunTracker/HealthRunTracker/App/APIConfig.swift
@@ -75,7 +84,7 @@ venv/bin/streamlit run streamlit_app/app.py --server.port 8501 --server.address 
 URLs utiles :
 
 - `http://localhost:8501`
-- `http://IP_DU_MAC:8501`
+- `http://MacBook-Pro-de-Albane.local:8501`
 
 Streamlit lit les donnees depuis Neon quand `DATABASE_URL` et l'utilisateur sont configures. Sinon, il peut retomber sur un CSV local si disponible.
 

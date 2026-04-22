@@ -5,6 +5,7 @@ __pycache__/
 
 # iOS
 DerivedData/
+.derivedData/
 *.xcuserstate
 
 # macOS
@@ -12,3 +13,7 @@ DerivedData/
 
 # Environment variables
 .env
+
+# Local dev logs
+*.log
+*.pid

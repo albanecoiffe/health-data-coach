@@ -1,5 +1,5 @@
 import Foundation
 
 enum APIConfig {
-    static let baseURL = "http://192.168.1.165:8000"
+    static let baseURL = "http://MacBook-Pro-de-Albane.local:8000"
 }

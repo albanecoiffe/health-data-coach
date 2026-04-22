@@ -13,7 +13,26 @@ Elle lit les donnees de course depuis Apple Health via HealthKit, affiche les vu
 
 HealthKit ne fournit pas les vraies donnees Apple Health dans le simulateur. Pour tester les seances, les zones cardiaques et les traces GPS, utiliser l'iPhone.
 
-## Lancer le backend
+## Lancer backend + app iPhone
+
+Depuis la racine du projet :
+
+```bash
+./scripts/dev_phone.sh
+```
+
+Cette commande :
+
+- demarre ou redemarre le backend FastAPI
+- verifie `http://MacBook-Pro-de-Albane.local:8000/health/db`
+- build l'app iOS en Debug
+- detecte l'iPhone connecte
+- installe l'app
+- lance l'app
+
+Le build utilise `/tmp/HealthCoachDerivedData` pour eviter les erreurs de signature quand le projet est dans iCloud.
+
+## Lancer le backend seul
 
 Depuis la racine du projet :
 
@@ -28,19 +47,15 @@ L'app iOS appelle ensuite l'API configuree dans :
 HealthRunTracker/HealthRunTracker/App/APIConfig.swift
 ```
 
-Si l'adresse IP du Mac change, mettre a jour :
+Configuration actuelle :
 
 ```swift
 enum APIConfig {
-    static let baseURL = "http://IP_DU_MAC:8000"
+    static let baseURL = "http://MacBook-Pro-de-Albane.local:8000"
 }
 ```
 
-Exemple actuel :
-
-```swift
-static let baseURL = "http://192.168.1.165:8000"
-```
+Le hostname `.local` evite de modifier l'app quand l'adresse IP Wi-Fi du Mac change.
 
 ## Lancer l'app sur l'iPhone
 
@@ -68,8 +83,9 @@ Au lancement, l'app :
 
 1. demande l'autorisation HealthKit si necessaire
 2. charge les donnees semaine et annee
-3. synchronise automatiquement les seances des 24 derniers mois vers le backend
-4. envoie les seances par lots vers `POST /api/run-sessions/batch`
+3. demande au backend la derniere seance deja stockee
+4. relit seulement les seances recentes dans HealthKit, avec une marge de deux jours
+5. envoie les nouveautes vers `POST /api/run-sessions/batch`
 
 La premiere page de synchronisation manuelle a ete retiree. L'app s'ouvre directement sur la vue semaine.
 
