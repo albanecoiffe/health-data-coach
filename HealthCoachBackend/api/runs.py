@@ -1,6 +1,7 @@
 # import
 from fastapi import APIRouter, Query
-from datetime import date
+from datetime import date, timezone
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 from core.models.RunSession import RunSession
@@ -42,6 +43,29 @@ def _apply_payload_to_session(session: RunSession, payload: RunSessionCreate) ->
     session.active_kcal = payload.active_kcal
 
 
+def _same_optional_float(left, right) -> bool:
+    if left is None and right is None:
+        return True
+    if left is None or right is None:
+        return False
+    return abs(float(left) - float(right)) < 0.000001
+
+
+def _session_matches_payload(session: RunSession, payload: RunSessionCreate) -> bool:
+    return (
+        _same_optional_float(session.distance_km, payload.distance_km)
+        and _same_optional_float(session.duration_min, payload.duration_min)
+        and _same_optional_float(session.avg_hr, payload.avg_hr)
+        and _same_optional_float(session.z1_min, payload.z1_min)
+        and _same_optional_float(session.z2_min, payload.z2_min)
+        and _same_optional_float(session.z3_min, payload.z3_min)
+        and _same_optional_float(session.z4_min, payload.z4_min)
+        and _same_optional_float(session.z5_min, payload.z5_min)
+        and _same_optional_float(session.elevation_m, payload.elevation_m)
+        and _same_optional_float(session.active_kcal, payload.active_kcal)
+    )
+
+
 def _upsert_run_session(db, payload: RunSessionCreate) -> str:
     existing = (
         db.query(RunSession)
@@ -53,6 +77,8 @@ def _upsert_run_session(db, payload: RunSessionCreate) -> str:
     )
 
     if existing:
+        if _session_matches_payload(existing, payload):
+            return "duplicate"
         _apply_payload_to_session(existing, payload)
         db.commit()
         return "updated"
@@ -96,11 +122,14 @@ def ingest_run_sessions_batch(payloads: list[RunSessionCreate]):
     if not payloads:
         return {"status": "ok", "inserted": 0, "updated": 0, "duplicates": 0}
 
+    batch_start = min(payload.start_time for payload in payloads)
+    batch_end = max(payload.start_time for payload in payloads)
     db = SessionLocal()
     inserted = 0
     updated = 0
     duplicates = 0
     touched_users = set()
+    dirty_users = set()
 
     try:
         for payload in payloads:
@@ -109,15 +138,30 @@ def ingest_run_sessions_batch(payloads: list[RunSessionCreate]):
                 status = _upsert_run_session(db, payload)
                 if status == "inserted":
                     inserted += 1
+                    dirty_users.add(payload.user_id)
                 elif status == "updated":
                     updated += 1
+                    dirty_users.add(payload.user_id)
+                elif status == "duplicate":
+                    duplicates += 1
             except IntegrityError:
                 db.rollback()
                 duplicates += 1
 
-        for user_id in touched_users:
+        for user_id in dirty_users:
             build_run_weeks(db, user_id)
             invalidate_signature(db, user_id)
+
+        print(
+            "📥 BATCH run-sessions:",
+            f"total={len(payloads)}",
+            f"inserted={inserted}",
+            f"updated={updated}",
+            f"duplicates={duplicates}",
+            f"from={batch_start}",
+            f"to={batch_end}",
+            f"rebuild_users={len(dirty_users)}",
+        )
 
         return {
             "status": "ok",
@@ -125,6 +169,31 @@ def ingest_run_sessions_batch(payloads: list[RunSessionCreate]):
             "updated": updated,
             "duplicates": duplicates,
             "total": len(payloads),
+        }
+    finally:
+        db.close()
+
+
+@router.get("/run-sessions/latest")
+def get_latest_run_session(user_id: str):
+    db = SessionLocal()
+    try:
+        latest = (
+            db.query(func.max(RunSession.start_time))
+            .filter(RunSession.user_id == user_id)
+            .scalar()
+        )
+        total = db.query(RunSession).filter(RunSession.user_id == user_id).count()
+
+        if latest is None:
+            latest_iso = None
+        else:
+            latest_iso = latest.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+
+        return {
+            "user_id": user_id,
+            "total": total,
+            "latest_start_time": latest_iso,
         }
     finally:
         db.close()

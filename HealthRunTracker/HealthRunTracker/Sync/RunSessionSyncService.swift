@@ -8,6 +8,12 @@ struct RunSessionBatchResponse: Codable {
     let total: Int?
 }
 
+struct RunSessionLatestResponse: Codable {
+    let user_id: String
+    let total: Int
+    let latest_start_time: String?
+}
+
 final class RunSessionSyncService {
 
     let baseURL: String
@@ -46,6 +52,57 @@ final class RunSessionSyncService {
 
             let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
             completion(.success(body))
+        }.resume()
+    }
+
+    func fetchLatestSessionStartTime(completion: @escaping (Result<Date?, Error>) -> Void) {
+        var components = URLComponents(string: "\(baseURL)/api/run-sessions/latest")
+        components?.queryItems = [
+            URLQueryItem(name: "user_id", value: userId)
+        ]
+
+        guard let url = components?.url else {
+            completion(.failure(NSError(domain: "sync", code: -1)))
+            return
+        }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.timeoutInterval = 10
+
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            guard let http = response as? HTTPURLResponse else {
+                completion(.failure(NSError(domain: "sync", code: -2)))
+                return
+            }
+
+            guard 200..<300 ~= http.statusCode else {
+                completion(.failure(NSError(domain: "sync", code: http.statusCode)))
+                return
+            }
+
+            guard let data else {
+                completion(.success(nil))
+                return
+            }
+
+            do {
+                let decoded = try JSONDecoder().decode(RunSessionLatestResponse.self, from: data)
+                guard let latestString = decoded.latest_start_time else {
+                    completion(.success(nil))
+                    return
+                }
+
+                let formatter = ISO8601DateFormatter()
+                completion(.success(formatter.date(from: latestString)))
+            } catch {
+                completion(.failure(error))
+            }
         }.resume()
     }
 

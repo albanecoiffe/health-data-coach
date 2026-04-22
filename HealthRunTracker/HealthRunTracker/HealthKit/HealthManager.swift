@@ -58,6 +58,15 @@ final class HealthManager: ObservableObject {
         didStartAutomaticSync = true
         requestAuthorization(syncAfterSuccess: true)
     }
+
+    func syncRecentRunSessionsWhenAppBecomesActive() {
+        guard didStartAutomaticSync else {
+            startAutomaticSyncOnLaunch()
+            return
+        }
+        guard !syncIsRunning else { return }
+        syncRecentRunSessionsOnLaunch()
+    }
     
     func requestAuthorization(syncAfterSuccess: Bool = false) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -215,10 +224,43 @@ final class HealthManager: ObservableObject {
     }
 
     func syncRecentRunSessionsOnLaunch() {
-        let calendar = Calendar.current
-        let end = Date()
-        let start = calendar.date(byAdding: .month, value: -24, to: end)!
-        runSync(from: start, to: end, label: "mise a jour auto 24 mois")
+        syncLatestRunSessions()
+    }
+
+    func syncLatestRunSessions() {
+        guard !syncIsRunning else { return }
+
+        syncStatusText = "Recherche derniere seance en base..."
+        syncLastErrorText = ""
+
+        syncService.fetchLatestSessionStartTime { result in
+            let calendar = Calendar.current
+            let end = Date()
+
+            let start: Date
+            let label: String
+
+            switch result {
+            case .success(let latestStartTime):
+                if let latestStartTime {
+                    start = calendar.date(byAdding: .day, value: -2, to: latestStartTime) ?? latestStartTime
+                    label = "nouveautes depuis derniere seance"
+                } else {
+                    start = calendar.date(byAdding: .month, value: -24, to: end)!
+                    label = "premiere synchro 24 mois"
+                }
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    self.syncStatusText = "Impossible de lire la derniere seance."
+                    self.syncLastErrorText = error.localizedDescription
+                }
+                return
+            }
+
+            DispatchQueue.main.async {
+                self.runSync(from: start, to: end, label: label)
+            }
+        }
     }
 
     func syncAllRunSessionsHistory() {
