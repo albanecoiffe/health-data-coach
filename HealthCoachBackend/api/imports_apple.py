@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
-from core.config import get_settings
+from api.auth import assert_import_token
 from core.services.imports.sessions_csv import import_sessions_dataframe
 
 
@@ -156,22 +156,13 @@ def _normalize_records(records: list[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _assert_import_token(request: Request):
-    expected = get_settings().import_api_token
-    if not expected:
-        return
-    provided = request.headers.get("X-Import-Token", "").strip()
-    if provided != expected:
-        raise HTTPException(status_code=401, detail="invalid import token")
-
-
 @router.post("/import-apple-health")
 async def import_apple_health(
     request: Request,
     file: UploadFile | None = File(default=None),
     user_id: str | None = None,
 ):
-    _assert_import_token(request)
+    assert_import_token(request)
 
     if file is not None:
         content = await file.read()

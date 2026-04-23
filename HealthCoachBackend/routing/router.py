@@ -32,13 +32,31 @@ from verbalization.verbalizer import (
 )
 
 from core.config import get_settings
-from routing.semantic_entrypoint import SemanticEntrypoint
+
+try:
+    from routing.semantic_entrypoint import SemanticEntrypoint
+except Exception as exc:  # pragma: no cover - startup fallback for lightweight deploys
+    SemanticEntrypoint = None
+    _semantic_import_error = exc
+else:
+    _semantic_import_error = None
 
 # =====================================================
 # INITIALISATION DU PRÉ-ROUTER SÉMANTIQUE (A)
 # =====================================================
 
-SEMANTIC_ENTRYPOINT = SemanticEntrypoint(connection_string=get_settings().database_url)
+if SemanticEntrypoint is None or not get_settings().database_url:
+    SEMANTIC_ENTRYPOINT = None
+    if _semantic_import_error is not None:
+        print("⚠️ Semantic router disabled:", _semantic_import_error)
+else:
+    try:
+        SEMANTIC_ENTRYPOINT = SemanticEntrypoint(
+            connection_string=get_settings().database_url
+        )
+    except Exception as exc:  # pragma: no cover - runtime fallback
+        SEMANTIC_ENTRYPOINT = None
+        print("⚠️ Semantic router init failed:", exc)
 
 
 # =====================================================
@@ -59,10 +77,13 @@ def route_intent(db: Session, user_id, intent: dict):
     if not original_message:
         original_message = intent.get("message", "")
 
-    intent = SEMANTIC_ENTRYPOINT.resolve_intent(
-        message=original_message,
-        base_intent=intent,
-    )
+    if SEMANTIC_ENTRYPOINT is not None:
+        intent = SEMANTIC_ENTRYPOINT.resolve_intent(
+            message=original_message,
+            base_intent=intent,
+        )
+    else:
+        intent["_source"] = "legacy_intent"
 
     print("🧠 Intent source :", intent.get("_source"))
     print("🧠 Confidence :", intent.get("_confidence"))

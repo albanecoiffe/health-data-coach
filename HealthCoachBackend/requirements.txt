@@ -1,9 +1,10 @@
 fastapi
 uvicorn
+python-multipart
 requests
-spacy
 nltk
 scikit-learn
+pandas
 psycopg2-binary
 SQLAlchemy
 python-dotenv
