@@ -1,11 +1,9 @@
 import json
 import re
 import unicodedata
-import spacy
 from nltk.stem.snowball import FrenchStemmer
 
 _stemmer = FrenchStemmer()
-nlp = spacy.load("fr_core_news_sm")
 
 
 def normalize_period(intent: dict) -> dict:
