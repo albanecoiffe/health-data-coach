@@ -4,6 +4,7 @@ python-multipart
 requests
 nltk
 scikit-learn
+pandas
 psycopg2-binary
 SQLAlchemy
 python-dotenv
