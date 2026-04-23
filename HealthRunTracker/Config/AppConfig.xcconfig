@@ -1,0 +1,7 @@
+// Shared app configuration.
+// LocalSecrets.xcconfig is optional and ignored by Git.
+
+HEALTHCOACH_API_BASE_URL =
+HEALTHCOACH_IMPORT_TOKEN =
+
+#include? "LocalSecrets.xcconfig"

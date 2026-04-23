@@ -13,6 +13,7 @@ DerivedData/
 
 # Environment variables
 .env
+HealthRunTracker/Config/LocalSecrets.xcconfig
 
 # Local dev logs
 *.log

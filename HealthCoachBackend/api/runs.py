@@ -1,6 +1,6 @@
 # import
 from fastapi import APIRouter, Query, Request
-from datetime import date, timezone
+from datetime import date, datetime, timezone
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from api.auth import assert_import_token
@@ -102,8 +102,8 @@ def ingest_run_session(request: Request, payload: RunSessionCreate):
         status = _upsert_run_session(db, payload)
 
         # 🔁 1️⃣ Rebuild / upsert RunWeek
-        print("🔄 Rebuilding RunWeek for user", payload.user_id)
-        build_run_weeks(db, payload.user_id)
+        print("🔄 Rebuilding touched RunWeek for user", payload.user_id)
+        build_run_weeks(db, payload.user_id, touched_dates=[payload.start_time])
 
         # 🔁 2️⃣ Invalider la signature
         print("♻️ Invalidating signature for user", payload.user_id)
@@ -131,20 +131,21 @@ def ingest_run_sessions_batch(request: Request, payloads: list[RunSessionCreate]
     inserted = 0
     updated = 0
     duplicates = 0
-    touched_users = set()
     dirty_users = set()
+    dirty_week_dates = {}
 
     try:
         for payload in payloads:
-            touched_users.add(payload.user_id)
             try:
                 status = _upsert_run_session(db, payload)
                 if status == "inserted":
                     inserted += 1
                     dirty_users.add(payload.user_id)
+                    dirty_week_dates.setdefault(payload.user_id, set()).add(payload.start_time)
                 elif status == "updated":
                     updated += 1
                     dirty_users.add(payload.user_id)
+                    dirty_week_dates.setdefault(payload.user_id, set()).add(payload.start_time)
                 elif status == "duplicate":
                     duplicates += 1
             except IntegrityError:
@@ -152,7 +153,11 @@ def ingest_run_sessions_batch(request: Request, payloads: list[RunSessionCreate]
                 duplicates += 1
 
         for user_id in dirty_users:
-            build_run_weeks(db, user_id)
+            build_run_weeks(
+                db,
+                user_id,
+                touched_dates=dirty_week_dates.get(user_id, set()),
+            )
             invalidate_signature(db, user_id)
 
         print(

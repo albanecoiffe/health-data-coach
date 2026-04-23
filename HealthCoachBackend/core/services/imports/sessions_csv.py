@@ -1,5 +1,6 @@
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -91,6 +92,7 @@ def import_sessions_dataframe(df: pd.DataFrame, user_id: str | None = None) -> d
     }
 
     db = SessionLocal()
+    touched_dates: list[datetime] = []
     try:
         for idx, row in df.iterrows():
             try:
@@ -111,6 +113,7 @@ def import_sessions_dataframe(df: pd.DataFrame, user_id: str | None = None) -> d
                 db.add(session)
                 db.commit()
                 stats["inserted"] += 1
+                touched_dates.append(session.start_time)
 
             except IntegrityError:
                 db.rollback()
@@ -122,7 +125,7 @@ def import_sessions_dataframe(df: pd.DataFrame, user_id: str | None = None) -> d
                     stats["errors"].append(f"row {idx}: {exc}")
 
         if stats["inserted"] > 0:
-            build_run_weeks(db, resolved_user_id)
+            build_run_weeks(db, resolved_user_id, touched_dates=touched_dates)
             invalidate_signature(db, resolved_user_id)
 
         return stats
