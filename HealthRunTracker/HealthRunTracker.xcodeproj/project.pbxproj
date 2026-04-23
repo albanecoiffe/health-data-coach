@@ -278,6 +278,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEALTHCOACH_API_BASE_URL = "https://healthcoach-api-ri82.onrender.com";
+				HEALTHCOACH_IMPORT_TOKEN = health-data-coach-token-test;
 				INFOPLIST_FILE = HealthRunTracker/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Cette application lit vos données de course et de marche depuis Santé afin d’afficher vos kilomètres parcourus par jour.";
@@ -325,6 +327,8 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEALTHCOACH_API_BASE_URL = "https://healthcoach-api-ri82.onrender.com";
+				HEALTHCOACH_IMPORT_TOKEN = health-data-coach-token-test;
 				INFOPLIST_FILE = HealthRunTracker/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Cette application lit vos données de course et de marche depuis Santé afin d’afficher vos kilomètres parcourus par jour.";
