@@ -38,7 +38,10 @@ def create_app() -> FastAPI:
     app.include_router(signature_router)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_api_route("/", root, methods=["GET"])
-    app.add_event_handler("startup", startup_tasks)
+
+    @app.on_event("startup")
+    def _startup() -> None:
+        startup_tasks()
 
     return app
 
