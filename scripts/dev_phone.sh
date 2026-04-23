@@ -16,6 +16,36 @@ APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphoneos/HealthRunTracker.app"
 
 echo "Backend URL: $BASE_URL"
 
+find_iphone_device_id() {
+  DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl list devices |
+    grep -E 'iPhone|Iphone' |
+    grep 'available (paired)' |
+    sed -E 's/.* ([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}) .*/\1/' |
+    head -n 1
+}
+
+run_with_retry() {
+  local label="$1"
+  shift
+  local attempts="${HEALTHCOACH_DEVICE_RETRIES:-3}"
+  local delay="${HEALTHCOACH_DEVICE_RETRY_DELAY:-4}"
+  local attempt
+
+  for attempt in $(seq 1 "$attempts"); do
+    echo "$label tentative $attempt/$attempts..."
+    if "$@"; then
+      return 0
+    fi
+
+    if [[ "$attempt" -lt "$attempts" ]]; then
+      echo "$label a echoue. Deverrouille l'iPhone et garde-le branche; nouvelle tentative dans ${delay}s."
+      sleep "$delay"
+    fi
+  done
+
+  return 1
+}
+
 if [[ ! -x "$BACKEND_DIR/venv/bin/python" ]]; then
   echo "Backend venv introuvable: $BACKEND_DIR/venv/bin/python"
   exit 1
@@ -69,13 +99,7 @@ fi
 
 device_id="${HEALTHCOACH_DEVICE_ID:-}"
 if [[ -z "$device_id" ]]; then
-  device_id="$(
-    DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl list devices |
-      grep -E 'iPhone|Iphone' |
-      grep 'available (paired)' |
-      sed -E 's/.* ([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}) .*/\1/' |
-      head -n 1
-  )"
+  device_id="$(find_iphone_device_id)"
 fi
 
 if [[ -z "$device_id" ]]; then
@@ -85,10 +109,17 @@ if [[ -z "$device_id" ]]; then
 fi
 
 echo "Installation sur iPhone: $device_id"
-DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl device install app --device "$device_id" "$APP_PATH"
+if ! run_with_retry "Installation" env DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl device install app --device "$device_id" "$APP_PATH"; then
+  echo "Installation impossible via devicectl."
+  echo "Actions utiles: deverrouiller l'iPhone, verifier le cable/Wi-Fi, accepter 'Faire confiance', puis relancer ./scripts/dev_phone.sh."
+  exit 1
+fi
 
 echo "Lancement de l'app..."
-DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl device process launch --device "$device_id" com.albane.health.HealthRunTracker
+if ! run_with_retry "Lancement" env DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl device process launch --device "$device_id" com.albane.health.HealthRunTracker; then
+  echo "L'app est installee mais n'a pas pu etre lancee via devicectl."
+  echo "Tu peux l'ouvrir manuellement sur l'iPhone."
+fi
 
 echo
 echo "Pret."
