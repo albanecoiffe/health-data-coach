@@ -20,8 +20,13 @@ final class RunSessionSyncService {
     let userId: String
 
     init(baseURL: String, userId: String) {
-        self.baseURL = APIConfig.baseURL
+        self.baseURL = baseURL
         self.userId = userId
+    }
+
+    private func applyImportToken(to request: inout URLRequest) {
+        guard let token = APIConfig.importToken else { return }
+        request.setValue(token, forHTTPHeaderField: "X-Import-Token")
     }
 
     func pingBackend(completion: @escaping (Result<String, Error>) -> Void) {
@@ -32,7 +37,7 @@ final class RunSessionSyncService {
 
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
-        req.timeoutInterval = 10
+        req.timeoutInterval = 45
 
         URLSession.shared.dataTask(with: req) { data, response, error in
             if let error = error {
@@ -68,7 +73,7 @@ final class RunSessionSyncService {
 
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
-        req.timeoutInterval = 10
+        req.timeoutInterval = 45
 
         URLSession.shared.dataTask(with: req) { data, response, error in
             if let error = error {
@@ -135,6 +140,7 @@ final class RunSessionSyncService {
         req.httpMethod = "POST"
         req.timeoutInterval = 20
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyImportToken(to: &req)
         req.httpBody = try? JSONEncoder().encode(payload)
 
         URLSession.shared.dataTask(with: req) { data, response, error in
@@ -201,6 +207,7 @@ final class RunSessionSyncService {
         req.httpMethod = "POST"
         req.timeoutInterval = timeout
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyImportToken(to: &req)
         req.httpBody = try? JSONEncoder().encode(payloads)
 
         URLSession.shared.dataTask(with: req) { data, response, error in

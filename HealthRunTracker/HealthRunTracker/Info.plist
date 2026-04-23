@@ -10,6 +10,12 @@
         <true/>
     </dict>
 
+    <key>HEALTHCOACH_API_BASE_URL</key>
+    <string>$(HEALTHCOACH_API_BASE_URL)</string>
+
+    <key>HEALTHCOACH_IMPORT_TOKEN</key>
+    <string>$(HEALTHCOACH_IMPORT_TOKEN)</string>
+
     <!-- 📍 Localisation -->
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Cette application utilise la localisation pour les tracés GPS de vos séances.</string>

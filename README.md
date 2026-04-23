@@ -42,6 +42,8 @@ HealthCoach/
 ├── scripts/
 │   └── dev_phone.sh                   # Lance backend + build + installation iPhone
 │
+├── render.yaml                        # Blueprint Render pour heberger l'API FastAPI
+│
 └── README.md                          # Vue globale du projet
 ```
 
@@ -130,7 +132,7 @@ cd HealthCoachBackend
 venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-L'app iOS pointe vers le nom local stable du Mac dans :
+L'app iOS choisit maintenant son URL selon l'environnement :
 
 ```text
 HealthRunTracker/HealthRunTracker/App/APIConfig.swift
@@ -140,11 +142,26 @@ Configuration actuelle :
 
 ```swift
 enum APIConfig {
-    static let baseURL = "http://MacBook-Pro-de-Albane.local:8000"
+    // Debug: http://MacBook-Pro-de-Albane.local:8000
+    // Release: https://healthcoach-api.onrender.com
 }
 ```
 
-Cela évite de modifier l'app quand l'adresse IP Wi-Fi du Mac change.
+Cela evite de modifier l'app quand on passe du backend local a l'API hebergee. Les valeurs peuvent aussi etre surchargees avec les build settings `HEALTHCOACH_API_BASE_URL` et `HEALTHCOACH_IMPORT_TOKEN`.
+
+## Déploiement Render
+
+Le fichier `render.yaml` declare le backend comme service web Python gratuit sur Render, avec `HealthCoachBackend` comme dossier racine.
+
+Variables a renseigner dans Render :
+
+```env
+DATABASE_URL=
+DEFAULT_USER_ID=
+IMPORT_API_TOKEN=
+```
+
+`IMPORT_API_TOKEN` protege les routes d'ingestion `POST /api/run-session` et `POST /api/run-sessions/batch`. L'app iOS doit etre build avec le meme token via `HEALTHCOACH_IMPORT_TOKEN`.
 
 ## Lancer l'app iOS
 
@@ -233,7 +250,7 @@ Exemples de requêtes :
 
 1. Lancer le backend.
 2. Vérifier `GET /health/db`.
-3. Mettre à jour `APIConfig.baseURL` si besoin.
+3. Verifier que `APIConfig.baseURL` cible le bon environnement.
 4. Compiler et lancer l'app sur l'iPhone.
 5. Accepter HealthKit.
 6. Vérifier que l'app s'ouvre sur la vue semaine.

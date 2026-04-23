@@ -1,8 +1,9 @@
 # import
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from datetime import date, timezone
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
+from api.auth import assert_import_token
 from database import SessionLocal
 from core.models.RunSession import RunSession
 from schemas.schemas import RunSessionCreate
@@ -92,7 +93,8 @@ def _upsert_run_session(db, payload: RunSessionCreate) -> str:
 # 🏃 ENDPOINTS SÉANCES DE COURSE
 # ======================================================
 @router.post("/run-session")
-def ingest_run_session(payload: RunSessionCreate):
+def ingest_run_session(request: Request, payload: RunSessionCreate):
+    assert_import_token(request)
     print("📥 INGEST:", payload.start_time)
     db = SessionLocal()
 
@@ -118,7 +120,8 @@ def ingest_run_session(payload: RunSessionCreate):
 
 
 @router.post("/run-sessions/batch")
-def ingest_run_sessions_batch(payloads: list[RunSessionCreate]):
+def ingest_run_sessions_batch(request: Request, payloads: list[RunSessionCreate]):
+    assert_import_token(request)
     if not payloads:
         return {"status": "ok", "inserted": 0, "updated": 0, "duplicates": 0}
 

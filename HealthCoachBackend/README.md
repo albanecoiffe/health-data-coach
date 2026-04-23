@@ -35,7 +35,7 @@ Variables importantes :
 - `DATABASE_URL` : connexion Neon/PostgreSQL.
 - `DEFAULT_USER_ID` : utilisateur par defaut pour le chat et Streamlit.
 - `USER_ID` : utilisateur force si besoin.
-- `IMPORT_API_TOKEN` : token optionnel pour proteger certains imports.
+- `IMPORT_API_TOKEN` : token optionnel pour proteger les routes d'ingestion publiques.
 - `SESSIONS_CSV_PATH` : chemin optionnel d'import CSV.
 - `AUTO_IMPORT_SESSIONS_ON_STARTUP` : active/desactive l'import CSV au demarrage.
 - `SESSIONS_CSV_POLL_SECONDS` : intervalle de polling CSV. `0` desactive le worker.
@@ -72,6 +72,37 @@ L'app iOS utilise la meme adresse dans :
 ```text
 HealthRunTracker/HealthRunTracker/App/APIConfig.swift
 ```
+
+En Debug, l'app retombe automatiquement sur `http://MacBook-Pro-de-Albane.local:8000`.
+En Release, elle retombe sur l'URL Render `https://healthcoach-api.onrender.com`, sauf si une valeur `HEALTHCOACH_API_BASE_URL` est fournie dans les build settings.
+
+## Deployer sur Render
+
+Le repo contient un `render.yaml` a la racine. Il declare un service web Python gratuit avec :
+
+```text
+rootDir: HealthCoachBackend
+buildCommand: pip install -r requirements.txt
+startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+Sur Render, renseigner au minimum :
+
+```env
+DATABASE_URL=
+DEFAULT_USER_ID=
+IMPORT_API_TOKEN=
+```
+
+Garder `AUTO_IMPORT_SESSIONS_ON_STARTUP=false` et `SESSIONS_CSV_POLL_SECONDS=0` sur Render : l'API hebergee doit recevoir les seances depuis l'app iOS, pas surveiller un CSV local.
+
+Une fois le service cree, verifier :
+
+```bash
+curl https://healthcoach-api.onrender.com/health/db
+```
+
+Si le nom Render choisi est different, mettre cette URL dans le build setting iOS `HEALTHCOACH_API_BASE_URL` ou ajuster le fallback Release dans `APIConfig.swift`.
 
 ## Lancer Streamlit
 
@@ -117,8 +148,8 @@ HealthCoachBackend/
 - `GET /health/db` : verification de la connexion Neon.
 - `GET /debug/tables` : liste les tables accessibles.
 - `POST /chat` : point d'entree du coach conversationnel.
-- `POST /api/run-session` : ingestion d'une seance.
-- `POST /api/run-sessions/batch` : ingestion par lots depuis l'app iOS.
+- `POST /api/run-session` : ingestion d'une seance, protegee par `X-Import-Token` si `IMPORT_API_TOKEN` est defini.
+- `POST /api/run-sessions/batch` : ingestion par lots depuis l'app iOS, protegee par `X-Import-Token` si `IMPORT_API_TOKEN` est defini.
 - `GET /api/run-sessions` : lecture des seances sur une periode.
 - `POST /api/import/apple-health` : import Apple Health JSON.
 - `POST /api/upload-sessions-csv` : import CSV.
@@ -132,7 +163,7 @@ Flux principal :
 
 1. L'app iOS lit les workouts HealthKit.
 2. Elle filtre les seances invalides.
-3. Elle envoie les donnees vers `POST /api/run-sessions/batch`.
+3. Elle envoie les donnees vers `POST /api/run-sessions/batch` avec `X-Import-Token` si un token est configure cote app.
 4. Le backend fait un upsert par `(user_id, start_time)`.
 5. Les semaines `RunWeek` sont reconstruites pour l'utilisateur touche.
 6. La signature coureur est invalidee pour etre recalculee a la prochaine demande.
