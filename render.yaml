@@ -26,3 +26,18 @@ services:
         value: llama3
       - key: OLLAMA_TIMEOUT_SECONDS
         value: "90"
+  - type: web
+    name: healthcoach-streamlit
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: HealthCoachBackend
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run streamlit_app/app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DEFAULT_USER_ID
+        sync: false
+      - key: USER_ID
+        sync: false

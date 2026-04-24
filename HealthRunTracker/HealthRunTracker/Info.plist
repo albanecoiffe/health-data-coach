@@ -13,6 +13,12 @@
     <key>HEALTHCOACH_API_BASE_URL</key>
     <string>$(HEALTHCOACH_API_BASE_URL)</string>
 
+    <key>HEALTHCOACH_API_SCHEME</key>
+    <string>$(HEALTHCOACH_API_SCHEME)</string>
+
+    <key>HEALTHCOACH_API_HOST</key>
+    <string>$(HEALTHCOACH_API_HOST)</string>
+
     <key>HEALTHCOACH_IMPORT_TOKEN</key>
     <string>$(HEALTHCOACH_IMPORT_TOKEN)</string>
 

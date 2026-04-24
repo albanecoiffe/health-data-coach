@@ -78,15 +78,21 @@ En Release, elle retombe sur l'URL Render `https://healthcoach-api.onrender.com`
 
 ## Deployer sur Render
 
-Le repo contient un `render.yaml` a la racine. Il declare un service web Python gratuit avec :
+Le repo contient un `render.yaml` a la racine. Il declare maintenant deux services web Python gratuits :
 
 ```text
+API
 rootDir: HealthCoachBackend
 buildCommand: pip install -r requirements.txt
 startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+Streamlit
+rootDir: HealthCoachBackend
+buildCommand: pip install -r requirements.txt
+startCommand: streamlit run streamlit_app/app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
 ```
 
-Sur Render, renseigner au minimum :
+Sur Render, renseigner au minimum pour l'API :
 
 ```env
 DATABASE_URL=
@@ -96,6 +102,15 @@ IMPORT_API_TOKEN=
 
 Garder `AUTO_IMPORT_SESSIONS_ON_STARTUP=false` et `SESSIONS_CSV_POLL_SECONDS=0` sur Render : l'API hebergee doit recevoir les seances depuis l'app iOS, pas surveiller un CSV local.
 
+Pour Streamlit, renseigner au minimum :
+
+```env
+DATABASE_URL=
+DEFAULT_USER_ID=
+```
+
+`USER_ID` reste optionnel si tu veux forcer un utilisateur particulier.
+
 Une fois le service cree, verifier :
 
 ```bash
@@ -103,6 +118,14 @@ curl https://healthcoach-api.onrender.com/health/db
 ```
 
 Si le nom Render choisi est different, mettre cette URL dans le build setting iOS `HEALTHCOACH_API_BASE_URL` ou ajuster le fallback Release dans `APIConfig.swift`.
+
+Pour Streamlit, l'URL sera du type :
+
+```text
+https://healthcoach-streamlit.onrender.com
+```
+
+Attention : sur le plan gratuit Render, le service peut s'endormir apres inactivite. La premiere ouverture apres une periode sans trafic peut donc prendre un peu de temps.
 
 ## Lancer Streamlit
 

@@ -2,6 +2,8 @@
 // LocalSecrets.xcconfig is optional and ignored by Git.
 
 HEALTHCOACH_API_BASE_URL =
+HEALTHCOACH_API_SCHEME =
+HEALTHCOACH_API_HOST =
 HEALTHCOACH_IMPORT_TOKEN =
 
 #include? "LocalSecrets.xcconfig"
