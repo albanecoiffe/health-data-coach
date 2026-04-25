@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from datetime import date, datetime
 
 from core.models.signature import RunnerSignatureModel
-from schemas.signature import RunnerSignature
 from core.services.signature.builder import build_runner_signature
+from schemas.signature import RunnerSignature
 
 
 def get_signature_from_store(
@@ -14,12 +14,11 @@ def get_signature_from_store(
     """
     Source of truth pour la runner signature.
 
-    Règles :
-    - si absente → calcul + persist
-    - si marquée needs_recompute → recalcul
-    - sinon → lecture DB
+    Regles :
+    - si absente -> calcul + persist Neon
+    - si marquee needs_recompute -> recalcul + persist Neon
+    - sinon -> lecture Neon
     """
-
     today = date.today()
     current_week = today.isocalendar()[:2]
 
@@ -31,11 +30,9 @@ def get_signature_from_store(
 
     if record:
         stored_week = record.period_end.isocalendar()[:2]
-
         if stored_week == current_week and not record.needs_recompute:
             return RunnerSignature.model_validate(record.signature_json)
 
-    # 🔁 rebuild automatique
     signature = build_runner_signature(db=db, user_id=user_id)
 
     if record:
