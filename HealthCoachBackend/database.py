@@ -5,6 +5,10 @@ from core.config import get_settings
 
 
 DATABASE_URL = get_settings().require_database_url()
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()

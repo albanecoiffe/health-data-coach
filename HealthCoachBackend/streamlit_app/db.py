@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
@@ -20,7 +21,15 @@ from core.heart_rate_zones import (
 load_dotenv(_ROOT / ".env")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL) if DATABASE_URL else None
+engine = (
+    create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+    )
+    if DATABASE_URL
+    else None
+)
 
 
 def resolve_user_id() -> str | None:
@@ -69,6 +78,19 @@ def _load_csv_sessions() -> pd.DataFrame:
     return _normalize_sessions(pd.read_csv(csv_path))
 
 
+def _read_sql_with_reconnect(query, params: dict[str, object]) -> pd.DataFrame:
+    if not engine:
+        return pd.DataFrame()
+
+    try:
+        with engine.connect() as conn:
+            return pd.read_sql(query, conn, params=params)
+    except OperationalError:
+        engine.dispose()
+        with engine.connect() as conn:
+            return pd.read_sql(query, conn, params=params)
+
+
 def load_all_sessions(user_id: str | None = None) -> pd.DataFrame:
     if not engine or not user_id:
         return _load_csv_sessions()
@@ -92,8 +114,7 @@ def load_all_sessions(user_id: str | None = None) -> pd.DataFrame:
         ORDER BY start_time ASC
         """
     )
-    with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params={"user_id": user_id})
+    df = _read_sql_with_reconnect(query, {"user_id": user_id})
     return _normalize_sessions(df)
 
 
