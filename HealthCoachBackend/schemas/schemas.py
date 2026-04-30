@@ -26,3 +26,13 @@ class RunSessionCreate(BaseModel):
     z3_min: float
     z4_min: float
     z5_min: float
+
+    session_type: Optional[str] = None
+    session_detail: Optional[str] = None
+
+
+class RunSessionMetadataUpdate(BaseModel):
+    user_id: UUID
+    start_time: datetime
+    session_type: Optional[str] = None
+    session_detail: Optional[str] = None

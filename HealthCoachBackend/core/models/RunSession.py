@@ -4,6 +4,7 @@ from sqlalchemy import (
     Column,
     Float,
     DateTime,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -53,6 +54,12 @@ class RunSession(Base):
     z3_min = Column(Float)
     z4_min = Column(Float)
     z5_min = Column(Float)
+
+    # -----------------------------
+    # Métadonnées séance
+    # -----------------------------
+    session_type = Column(Text)
+    session_detail = Column(Text)
 
     # -----------------------------
     # Contraintes

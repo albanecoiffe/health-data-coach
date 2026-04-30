@@ -74,6 +74,7 @@ extension HealthManager {
 
                     let run = DailyRunData(
                         hkWorkout: workout,
+                        id: workout.uuid,
                         date: workout.startDate,
                         distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
                         durationMin: workout.duration / 60,
@@ -86,7 +87,10 @@ extension HealthManager {
                         z3: zones?.z3 ?? 0,
                         z4: zones?.z4 ?? 0,
                         z5: zones?.z5 ?? 0,
-                        heartRateTimeline: timeline
+                        heartRateTimeline: timeline,
+                        sessionType: nil,
+                        predictedSessionType: nil,
+                        sessionDetail: nil
                     )
 
                     sessions.append(run)
@@ -96,16 +100,35 @@ extension HealthManager {
 
             outerGroup.notify(queue: .main) {
                 let sortedSessions = sessions.sorted { $0.date < $1.date }
-                self.weeklyData = sortedSessions
-                self.weeklyZoneBreakdown = sortedSessions.map {
-                    SessionZoneBreakdown(
-                        workoutStart: $0.date,
-                        z1: $0.z1,
-                        z2: $0.z2,
-                        z3: $0.z3,
-                        z4: $0.z4,
-                        z5: $0.z5
-                    )
+
+                self.syncService.fetchSessionMetadata(
+                    startDate: interval.start,
+                    endDate: interval.end
+                ) { result in
+                    DispatchQueue.main.async {
+                        let enrichedSessions: [DailyRunData]
+
+                        switch result {
+                        case .success(let metadataList):
+                            enrichedSessions = self.applyMetadata(metadataList, to: sortedSessions)
+                            self.sessionMetadataErrorText = ""
+                        case .failure(let error):
+                            enrichedSessions = sortedSessions
+                            self.sessionMetadataErrorText = error.localizedDescription
+                        }
+
+                        self.weeklyData = enrichedSessions
+                        self.weeklyZoneBreakdown = enrichedSessions.map {
+                            SessionZoneBreakdown(
+                                workoutStart: $0.date,
+                                z1: $0.z1,
+                                z2: $0.z2,
+                                z3: $0.z3,
+                                z4: $0.z4,
+                                z5: $0.z5
+                            )
+                        }
+                    }
                 }
             }
         }

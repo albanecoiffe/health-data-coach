@@ -1,15 +1,16 @@
 # import
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import date, datetime, timezone
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from api.auth import assert_import_token
 from database import SessionLocal
 from core.models.RunSession import RunSession
-from schemas.schemas import RunSessionCreate
+from schemas.schemas import RunSessionCreate, RunSessionMetadataUpdate
 from core.services.signature.signature_store import invalidate_signature
 from core.services.run_weeks.builder import build_run_weeks
 from core.services.run_sessions.loader import load_run_sessions
+from core.services.session_type_predictor import predict_session_type
 
 router = APIRouter(prefix="/api")
 
@@ -28,6 +29,8 @@ def _create_run_session_from_payload(payload: RunSessionCreate) -> RunSession:
         z5_min=payload.z5_min,
         elevation_m=payload.elevation_m,
         active_kcal=payload.active_kcal,
+        session_type=payload.session_type,
+        session_detail=payload.session_detail,
     )
 
 
@@ -42,6 +45,10 @@ def _apply_payload_to_session(session: RunSession, payload: RunSessionCreate) ->
     session.z5_min = payload.z5_min
     session.elevation_m = payload.elevation_m
     session.active_kcal = payload.active_kcal
+    if payload.session_type is not None:
+        session.session_type = payload.session_type
+    if payload.session_detail is not None:
+        session.session_detail = payload.session_detail
 
 
 def _same_optional_float(left, right) -> bool:
@@ -87,6 +94,22 @@ def _upsert_run_session(db, payload: RunSessionCreate) -> str:
     db.add(_create_run_session_from_payload(payload))
     db.commit()
     return "inserted"
+
+
+def _serialize_session_metadata(db, session: RunSession) -> dict:
+    predicted = None
+    if not session.session_type:
+        predicted = predict_session_type(db, session.user_id, session)
+
+    effective = session.session_type or predicted
+
+    return {
+        "start_time": session.start_time.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "session_type": session.session_type,
+        "predicted_session_type": predicted,
+        "effective_session_type": effective,
+        "session_detail": session.session_detail,
+    }
 
 
 # ======================================================
@@ -223,5 +246,64 @@ def get_run_sessions(
 
         return filtered
 
+    finally:
+        db.close()
+
+
+@router.get("/run-sessions/metadata")
+def get_run_sessions_metadata(
+    user_id: str,
+    start_date: date = Query(...),
+    end_date: date = Query(...),
+):
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.min.time())
+
+    db = SessionLocal()
+    try:
+        sessions = (
+            db.query(RunSession)
+            .filter(
+                RunSession.user_id == user_id,
+                RunSession.start_time >= start_dt,
+                RunSession.start_time < end_dt,
+            )
+            .order_by(RunSession.start_time.asc())
+            .all()
+        )
+
+        return [_serialize_session_metadata(db, session) for session in sessions]
+    finally:
+        db.close()
+
+
+@router.patch("/run-sessions/metadata")
+def update_run_session_metadata(payload: RunSessionMetadataUpdate):
+    db = SessionLocal()
+    try:
+        session = (
+            db.query(RunSession)
+            .filter(
+                RunSession.user_id == payload.user_id,
+                RunSession.start_time == payload.start_time,
+            )
+            .first()
+        )
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Run session not found")
+
+        session.session_type = (
+            payload.session_type.strip() if payload.session_type and payload.session_type.strip() else None
+        )
+        session.session_detail = (
+            payload.session_detail.strip() if payload.session_detail and payload.session_detail.strip() else None
+        )
+
+        db.commit()
+        invalidate_signature(db, payload.user_id)
+
+        db.refresh(session)
+        return _serialize_session_metadata(db, session)
     finally:
         db.close()

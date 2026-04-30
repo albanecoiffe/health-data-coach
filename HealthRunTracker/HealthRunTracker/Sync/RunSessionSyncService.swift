@@ -14,6 +14,25 @@ struct RunSessionLatestResponse: Codable {
     let latest_start_time: String?
 }
 
+struct RunSessionMetadata: Codable {
+    let start_time: String
+    let session_type: String?
+    let predicted_session_type: String?
+    let effective_session_type: String?
+    let session_detail: String?
+
+    var startDate: Date? {
+        ISO8601DateFormatter().date(from: start_time)
+    }
+}
+
+struct RunSessionMetadataUpdatePayload: Codable {
+    let user_id: String
+    let start_time: String
+    let session_type: String?
+    let session_detail: String?
+}
+
 final class RunSessionSyncService {
 
     let baseURL: String
@@ -243,6 +262,119 @@ final class RunSessionSyncService {
 
             do {
                 let decoded = try JSONDecoder().decode(RunSessionBatchResponse.self, from: data)
+                completion(.success(decoded))
+            } catch {
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+
+    func fetchSessionMetadata(
+        startDate: Date,
+        endDate: Date,
+        completion: @escaping (Result<[RunSessionMetadata], Error>) -> Void
+    ) {
+        var components = URLComponents(string: "\(baseURL)/api/run-sessions/metadata")
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.calendar = Calendar(identifier: .gregorian)
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.timeZone = Calendar.current.timeZone
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        components?.queryItems = [
+            URLQueryItem(name: "user_id", value: userId),
+            URLQueryItem(name: "start_date", value: dateFormatter.string(from: startDate)),
+            URLQueryItem(name: "end_date", value: dateFormatter.string(from: endDate))
+        ]
+
+        guard let url = components?.url else {
+            completion(.failure(NSError(domain: "sync", code: -1)))
+            return
+        }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.timeoutInterval = 45
+
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            guard let http = response as? HTTPURLResponse else {
+                completion(.failure(NSError(domain: "sync", code: -2)))
+                return
+            }
+
+            guard 200..<300 ~= http.statusCode else {
+                completion(.failure(NSError(domain: "sync", code: http.statusCode)))
+                return
+            }
+
+            guard let data else {
+                completion(.success([]))
+                return
+            }
+
+            do {
+                let decoded = try JSONDecoder().decode([RunSessionMetadata].self, from: data)
+                completion(.success(decoded))
+            } catch {
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+
+    func updateSessionMetadata(
+        startDate: Date,
+        sessionType: String?,
+        sessionDetail: String?,
+        completion: @escaping (Result<RunSessionMetadata, Error>) -> Void
+    ) {
+        guard let url = URL(string: "\(baseURL)/api/run-sessions/metadata") else {
+            completion(.failure(NSError(domain: "sync", code: -1)))
+            return
+        }
+
+        let formatter = ISO8601DateFormatter()
+        let payload = RunSessionMetadataUpdatePayload(
+            user_id: userId,
+            start_time: formatter.string(from: startDate),
+            session_type: sessionType,
+            session_detail: sessionDetail
+        )
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "PATCH"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONEncoder().encode(payload)
+
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            guard let http = response as? HTTPURLResponse else {
+                completion(.failure(NSError(domain: "sync", code: -2)))
+                return
+            }
+
+            guard 200..<300 ~= http.statusCode else {
+                completion(.failure(NSError(domain: "sync", code: http.statusCode)))
+                return
+            }
+
+            guard let data else {
+                completion(.failure(NSError(domain: "sync", code: -3)))
+                return
+            }
+
+            do {
+                let decoded = try JSONDecoder().decode(RunSessionMetadata.self, from: data)
                 completion(.success(decoded))
             } catch {
                 completion(.failure(error))

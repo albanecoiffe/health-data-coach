@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from db import load_sessions_between, resolve_user_id
+from db import load_sessions_between, resolve_user_id, update_session_metadata
 from core.heart_rate_zones import (
     HEART_RATE_ZONES,
     zone_color_map,
@@ -144,3 +144,72 @@ st.plotly_chart(fig_delta, width="stretch")
 
 previous_distance = df_prev["distance_km"].sum() if not df_prev.empty else 0.0
 st.write(f"Semaine precedente: {previous_distance:.1f} km")
+
+st.divider()
+st.subheader("Classification des séances")
+
+SESSION_TYPE_OPTIONS = [
+    "footing",
+    "fractionné",
+    "sortie longue",
+    "semi marathon",
+    "marathon",
+]
+
+display_df = df.sort_values("start_time", ascending=False).copy()
+
+for idx, row in display_df.iterrows():
+    timestamp_label = row["start_time"].strftime("%a %d/%m %H:%M")
+    distance_label = f"{row['distance_km']:.2f} km"
+    duration_label = f"{row['duration_min']:.0f} min"
+    detail_text = (row.get("session_detail") or "").strip()
+    locked = bool((row.get("session_type") or "").strip())
+    effective_type = row.get("effective_session_type") or "—"
+    predicted_type = row.get("predicted_session_type")
+
+    with st.expander(f"{timestamp_label} · {distance_label} · {duration_label}", expanded=not locked):
+        top_left, top_mid, top_right = st.columns([1.4, 1.1, 1.2])
+        top_left.metric("Distance", distance_label)
+        top_mid.metric("Durée", duration_label)
+        top_right.metric("FC moy.", f"{row['avg_hr']:.0f} bpm" if row["avg_hr"] > 0 else "—")
+
+        if locked:
+            st.success("Séance déjà enregistrée en base")
+            c1, c2 = st.columns(2)
+            c1.markdown(f"**Catégorie**  \n{effective_type}")
+            c2.markdown(f"**Détail**  \n{detail_text or 'Aucun détail saisi'}")
+        else:
+            if predicted_type:
+                st.info(f"Prédiction actuelle : **{predicted_type}**")
+            else:
+                st.warning("Aucune prédiction disponible pour cette séance.")
+
+            with st.form(key=f"session_meta_form_{idx}"):
+                default_type = predicted_type if predicted_type in SESSION_TYPE_OPTIONS else SESSION_TYPE_OPTIONS[0]
+                selected_type = st.selectbox(
+                    "Catégorie",
+                    SESSION_TYPE_OPTIONS,
+                    index=SESSION_TYPE_OPTIONS.index(default_type),
+                    key=f"session_type_{idx}",
+                )
+                entered_detail = st.text_input(
+                    "Détail de la séance",
+                    value=detail_text,
+                    placeholder="Ex: 6x400 R100 4:20/km",
+                    key=f"session_detail_{idx}",
+                )
+                submitted = st.form_submit_button("Enregistrer")
+
+            if submitted:
+                try:
+                    update_session_metadata(
+                        user_id=user_id,
+                        start_time=row["start_time"],
+                        session_type=selected_type,
+                        session_detail=entered_detail,
+                    )
+                    st.cache_data.clear()
+                    st.success("Séance enregistrée.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Impossible d'enregistrer la séance : {exc}")

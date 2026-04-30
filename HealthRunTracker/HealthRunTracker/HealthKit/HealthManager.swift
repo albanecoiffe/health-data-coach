@@ -50,8 +50,103 @@ final class HealthManager: ObservableObject {
     @Published var syncSkippedCount: Int = 0
     @Published var syncIsRunning: Bool = false
     @Published var syncLastErrorText: String = ""
+    @Published var sessionMetadataErrorText: String = ""
 
     private var didStartAutomaticSync = false
+
+    func applyMetadata(
+        _ metadataList: [RunSessionMetadata],
+        to sessions: [DailyRunData]
+    ) -> [DailyRunData] {
+        let metadataEntries = metadataList.compactMap { metadata -> (date: Date, metadata: RunSessionMetadata)? in
+            guard let date = metadata.startDate else { return nil }
+            return (date, metadata)
+        }
+
+        return sessions.map { session in
+            let matched = metadataEntries
+                .map { entry in
+                    (
+                        delta: abs(entry.date.timeIntervalSince(session.date)),
+                        metadata: entry.metadata
+                    )
+                }
+                .filter { $0.delta <= 180 }
+                .min { $0.delta < $1.delta }
+
+            guard let metadata = matched?.metadata else {
+                return session
+            }
+
+            return DailyRunData(
+                hkWorkout: session.hkWorkout,
+                id: session.id,
+                date: session.date,
+                distanceKm: session.distanceKm,
+                durationMin: session.durationMin,
+                elevationGainM: session.elevationGainM,
+                dayLabel: session.dayLabel,
+                averageHeartRate: session.averageHeartRate,
+                z1: session.z1,
+                z2: session.z2,
+                z3: session.z3,
+                z4: session.z4,
+                z5: session.z5,
+                heartRateTimeline: session.heartRateTimeline,
+                sessionType: metadata.session_type,
+                predictedSessionType: metadata.predicted_session_type,
+                sessionDetail: metadata.session_detail
+            )
+        }
+    }
+
+    func updateSessionMetadata(
+        for session: DailyRunData,
+        sessionType: String?,
+        sessionDetail: String?,
+        completion: ((Result<Void, Error>) -> Void)? = nil
+    ) {
+        syncService.updateSessionMetadata(
+            startDate: session.date,
+            sessionType: sessionType,
+            sessionDetail: sessionDetail
+        ) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let metadata):
+                    self.weeklyData = self.applyMetadata([metadata], to: self.weeklyData)
+                    self.sessionMetadataErrorText = ""
+                    completion?(.success(()))
+                case .failure(let error):
+                    self.sessionMetadataErrorText = error.localizedDescription
+                    completion?(.failure(error))
+                }
+            }
+        }
+    }
+
+    func refreshMetadata(for session: DailyRunData) {
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: session.date)
+        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
+            return
+        }
+
+        syncService.fetchSessionMetadata(
+            startDate: startOfDay,
+            endDate: endOfDay
+        ) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let metadataList):
+                    self.weeklyData = self.applyMetadata(metadataList, to: self.weeklyData)
+                    self.sessionMetadataErrorText = ""
+                case .failure(let error):
+                    self.sessionMetadataErrorText = error.localizedDescription
+                }
+            }
+        }
+    }
 
     func startAutomaticSyncOnLaunch() {
         guard !didStartAutomaticSync else { return }

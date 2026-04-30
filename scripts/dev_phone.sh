@@ -13,6 +13,7 @@ PROJECT="$IOS_DIR/HealthRunTracker.xcodeproj"
 SCHEME="${HEALTHCOACH_SCHEME:-HealthRunTracker}"
 DERIVED_DATA_PATH="${HEALTHCOACH_DERIVED_DATA:-/tmp/HealthCoachDerivedData}"
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphoneos/HealthRunTracker.app"
+ALLOW_PROVISIONING_UPDATES="${HEALTHCOACH_ALLOW_PROVISIONING_UPDATES:-1}"
 
 echo "Backend URL: $BASE_URL"
 
@@ -84,12 +85,20 @@ if ! curl -fsS "$BASE_URL/health/db" >/dev/null 2>&1; then
 fi
 
 echo "Build iOS..."
+XCODEBUILD_ARGS=(
+  -project "$PROJECT"
+  -scheme "$SCHEME"
+  -configuration Debug
+  -destination generic/platform=iOS
+  -derivedDataPath "$DERIVED_DATA_PATH"
+)
+
+if [[ "$ALLOW_PROVISIONING_UPDATES" == "1" ]]; then
+  XCODEBUILD_ARGS+=(-allowProvisioningUpdates)
+fi
+
 DEVELOPER_DIR="$XCODE_DEV_DIR" xcodebuild \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
-  -configuration Debug \
-  -destination generic/platform=iOS \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
+  "${XCODEBUILD_ARGS[@]}" \
   build
 
 if [[ ! -d "$APP_PATH" ]]; then

@@ -57,6 +57,7 @@ extension HealthManager {
                     
                     let run = DailyRunData(
                         hkWorkout: workout,
+                        id: workout.uuid,
                         date: workout.startDate,
                         distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
                         durationMin: workout.duration / 60,
@@ -68,7 +69,11 @@ extension HealthManager {
                         z2: zones?.z2 ?? 0,
                         z3: zones?.z3 ?? 0,
                         z4: zones?.z4 ?? 0,
-                        z5: zones?.z5 ?? 0, heartRateTimeline: []
+                        z5: zones?.z5 ?? 0,
+                        heartRateTimeline: [],
+                        sessionType: nil,
+                        predictedSessionType: nil,
+                        sessionDetail: nil
                     )
                     
                     results.append(run)
@@ -120,6 +125,7 @@ extension HealthManager {
                     .doubleValue(for: HKUnit(from: "count/min")) ?? 0
                 return DailyRunData(
                     hkWorkout: workout,
+                    id: workout.uuid,
                     date: workout.startDate,
                     distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
                     durationMin: workout.duration / 60,
@@ -127,7 +133,11 @@ extension HealthManager {
                         .doubleValue(for: .meter()) ?? 0,
                     dayLabel: formatter.string(from: workout.startDate),
                     averageHeartRate: avgHR,
-                    z1: 0, z2: 0, z3: 0, z4: 0, z5: 0, heartRateTimeline: []
+                    z1: 0, z2: 0, z3: 0, z4: 0, z5: 0,
+                    heartRateTimeline: [],
+                    sessionType: nil,
+                    predictedSessionType: nil,
+                    sessionDetail: nil
                 )
 
 
