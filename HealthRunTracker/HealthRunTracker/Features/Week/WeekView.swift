@@ -16,6 +16,30 @@ struct ContentView: View {
                         weekRangeText: currentWeekRangeText()
                     )
 
+                    if healthManager.isLoadingWeeklyData {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .tint(.white)
+                            Text(
+                                healthManager.weeklyData.isEmpty
+                                ? "Chargement rapide des séances..."
+                                : "Mise à jour des zones cardiaques..."
+                            )
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.82))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.08))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        )
+                    }
+
                     WeekStatsGrid(
                         totalDistance: totalDistance(),
                         totalElevation: totalElevation(),

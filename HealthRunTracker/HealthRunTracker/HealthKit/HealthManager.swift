@@ -51,8 +51,26 @@ final class HealthManager: ObservableObject {
     @Published var syncIsRunning: Bool = false
     @Published var syncLastErrorText: String = ""
     @Published var sessionMetadataErrorText: String = ""
+    @Published var isLoadingWeeklyData: Bool = false
 
     private var didStartAutomaticSync = false
+    private var activeWeeklyRequestID = UUID()
+
+    func beginWeeklyRequest() -> UUID {
+        let requestID = UUID()
+        activeWeeklyRequestID = requestID
+        isLoadingWeeklyData = true
+        return requestID
+    }
+
+    func isCurrentWeeklyRequest(_ requestID: UUID) -> Bool {
+        activeWeeklyRequestID == requestID
+    }
+
+    func finishWeeklyRequest(_ requestID: UUID) {
+        guard isCurrentWeeklyRequest(requestID) else { return }
+        isLoadingWeeklyData = false
+    }
 
     func applyMetadata(
         _ metadataList: [RunSessionMetadata],
@@ -123,6 +141,40 @@ final class HealthManager: ObservableObject {
                 }
             }
         }
+    }
+
+    func mergeWorkoutDetails(
+        _ detailedSessions: [DailyRunData],
+        into sessions: [DailyRunData]
+    ) -> [DailyRunData] {
+        let detailsByID = Dictionary(uniqueKeysWithValues: detailedSessions.map { ($0.id, $0) })
+
+        return sessions.map { session in
+            guard let detailed = detailsByID[session.id] else {
+                return session
+            }
+
+            return DailyRunData(
+                hkWorkout: detailed.hkWorkout,
+                id: detailed.id,
+                date: detailed.date,
+                distanceKm: detailed.distanceKm,
+                durationMin: detailed.durationMin,
+                elevationGainM: detailed.elevationGainM,
+                dayLabel: detailed.dayLabel,
+                averageHeartRate: detailed.averageHeartRate,
+                z1: detailed.z1,
+                z2: detailed.z2,
+                z3: detailed.z3,
+                z4: detailed.z4,
+                z5: detailed.z5,
+                heartRateTimeline: detailed.heartRateTimeline,
+                sessionType: session.sessionType,
+                predictedSessionType: session.predictedSessionType,
+                sessionDetail: session.sessionDetail
+            )
+        }
+        .sorted { $0.date < $1.date }
     }
 
     func refreshMetadata(for session: DailyRunData) {

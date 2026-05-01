@@ -6,9 +6,24 @@ extension HealthManager {
     // MARK: - Heart Rate Zones (legacy UI)
     func fetchWeeklyRunningData(for offset: Int) {
         let calendar = Calendar.current
+        let requestID: UUID
+        if Thread.isMainThread {
+            requestID = self.beginWeeklyRequest()
+        } else {
+            var capturedRequestID = UUID()
+            DispatchQueue.main.sync {
+                capturedRequestID = self.beginWeeklyRequest()
+            }
+            requestID = capturedRequestID
+        }
 
         guard let ref = calendar.date(byAdding: .weekOfYear, value: offset, to: Date()),
-              let interval = calendar.dateInterval(of: .weekOfYear, for: ref) else { return }
+              let interval = calendar.dateInterval(of: .weekOfYear, for: ref) else {
+            DispatchQueue.main.async {
+                self.finishWeeklyRequest(requestID)
+            }
+            return
+        }
 
         let datePredicate = HKQuery.predicateForSamples(withStart: interval.start, end: interval.end)
         let runningPredicate = HKQuery.predicateForWorkouts(with: .running)
@@ -28,8 +43,10 @@ extension HealthManager {
                   let workouts = samples as? [HKWorkout],
                   error == nil else {
                 DispatchQueue.main.async {
-                    self?.weeklyData = []
-                    self?.weeklyZoneBreakdown = []
+                    guard let self = self, self.isCurrentWeeklyRequest(requestID) else { return }
+                    self.weeklyData = []
+                    self.weeklyZoneBreakdown = []
+                    self.finishWeeklyRequest(requestID)
                 }
                 return
             }
@@ -38,34 +55,109 @@ extension HealthManager {
             formatter.locale = Locale(identifier: "fr_FR")
             formatter.dateFormat = "E"
 
-            var sessions: [DailyRunData] = []
-            let outerGroup = DispatchGroup()
+            let baseSessions = workouts.map { workout -> DailyRunData in
+                let avgHR = workout.statistics(
+                    for: HKQuantityType.quantityType(forIdentifier: .heartRate)!
+                )?
+                .averageQuantity()?
+                .doubleValue(for: HKUnit(from: "count/min")) ?? 0
+
+                return DailyRunData(
+                    hkWorkout: workout,
+                    id: workout.uuid,
+                    date: workout.startDate,
+                    distanceKm: (workout.totalDistance?.doubleValue(for: .meter()) ?? 0) / 1000,
+                    durationMin: workout.duration / 60,
+                    elevationGainM: (workout.metadata?["HKElevationAscended"] as? HKQuantity)?
+                        .doubleValue(for: .meter()) ?? 0,
+                    dayLabel: formatter.string(from: workout.startDate),
+                    averageHeartRate: avgHR,
+                    z1: 0,
+                    z2: 0,
+                    z3: 0,
+                    z4: 0,
+                    z5: 0,
+                    heartRateTimeline: [],
+                    sessionType: nil,
+                    predictedSessionType: nil,
+                    sessionDetail: nil
+                )
+            }
+            .sorted { $0.date < $1.date }
+
+            DispatchQueue.main.async {
+                guard self.isCurrentWeeklyRequest(requestID) else { return }
+                self.weeklyData = baseSessions
+                self.weeklyZoneBreakdown = baseSessions.map {
+                    SessionZoneBreakdown(
+                        workoutStart: $0.date,
+                        z1: 0,
+                        z2: 0,
+                        z3: 0,
+                        z4: 0,
+                        z5: 0
+                    )
+                }
+                self.sessionMetadataErrorText = ""
+            }
+
+            if workouts.isEmpty {
+                DispatchQueue.main.async {
+                    self.finishWeeklyRequest(requestID)
+                }
+                return
+            }
+
+            let enrichmentGroup = DispatchGroup()
+
+            enrichmentGroup.enter()
+            self.syncService.fetchSessionMetadata(
+                startDate: interval.start,
+                endDate: interval.end
+            ) { result in
+                DispatchQueue.main.async {
+                    guard self.isCurrentWeeklyRequest(requestID) else {
+                        enrichmentGroup.leave()
+                        return
+                    }
+
+                    switch result {
+                    case .success(let metadataList):
+                        self.weeklyData = self.applyMetadata(metadataList, to: self.weeklyData)
+                        self.sessionMetadataErrorText = ""
+                    case .failure(let error):
+                        self.sessionMetadataErrorText = error.localizedDescription
+                    }
+
+                    enrichmentGroup.leave()
+                }
+            }
+
+            enrichmentGroup.enter()
+            let detailGroup = DispatchGroup()
+            let detailedSessionsLock = NSLock()
+            var detailedSessions: [DailyRunData] = []
 
             for workout in workouts {
-                outerGroup.enter()
+                detailGroup.enter()
 
                 var zones: SessionZoneBreakdown?
                 var timeline: [HeartRateSample] = []
-
                 let innerGroup = DispatchGroup()
 
-                // 1️⃣ Zones FC
                 innerGroup.enter()
                 self.computeZonesForWorkout(workout) {
                     zones = $0
                     innerGroup.leave()
                 }
 
-                // 2️⃣ Timeline FC
                 innerGroup.enter()
                 self.fetchHeartRateTimeline(for: workout) {
                     timeline = $0
                     innerGroup.leave()
                 }
 
-                // 3️⃣ Construire la séance UNE FOIS tout prêt
                 innerGroup.notify(queue: .global()) {
-
                     let avgHR = workout.statistics(
                         for: HKQuantityType.quantityType(forIdentifier: .heartRate)!
                     )?
@@ -93,43 +185,35 @@ extension HealthManager {
                         sessionDetail: nil
                     )
 
-                    sessions.append(run)
-                    outerGroup.leave()
+                    detailedSessionsLock.lock()
+                    detailedSessions.append(run)
+                    detailedSessionsLock.unlock()
+                    detailGroup.leave()
                 }
             }
 
-            outerGroup.notify(queue: .main) {
-                let sortedSessions = sessions.sorted { $0.date < $1.date }
-
-                self.syncService.fetchSessionMetadata(
-                    startDate: interval.start,
-                    endDate: interval.end
-                ) { result in
-                    DispatchQueue.main.async {
-                        let enrichedSessions: [DailyRunData]
-
-                        switch result {
-                        case .success(let metadataList):
-                            enrichedSessions = self.applyMetadata(metadataList, to: sortedSessions)
-                            self.sessionMetadataErrorText = ""
-                        case .failure(let error):
-                            enrichedSessions = sortedSessions
-                            self.sessionMetadataErrorText = error.localizedDescription
-                        }
-
-                        self.weeklyData = enrichedSessions
-                        self.weeklyZoneBreakdown = enrichedSessions.map {
-                            SessionZoneBreakdown(
-                                workoutStart: $0.date,
-                                z1: $0.z1,
-                                z2: $0.z2,
-                                z3: $0.z3,
-                                z4: $0.z4,
-                                z5: $0.z5
-                            )
-                        }
-                    }
+            detailGroup.notify(queue: .main) {
+                guard self.isCurrentWeeklyRequest(requestID) else {
+                    enrichmentGroup.leave()
+                    return
                 }
+
+                self.weeklyData = self.mergeWorkoutDetails(detailedSessions, into: self.weeklyData)
+                self.weeklyZoneBreakdown = self.weeklyData.map {
+                    SessionZoneBreakdown(
+                        workoutStart: $0.date,
+                        z1: $0.z1,
+                        z2: $0.z2,
+                        z3: $0.z3,
+                        z4: $0.z4,
+                        z5: $0.z5
+                    )
+                }
+                enrichmentGroup.leave()
+            }
+
+            enrichmentGroup.notify(queue: .main) {
+                self.finishWeeklyRequest(requestID)
             }
         }
 
