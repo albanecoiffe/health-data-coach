@@ -10,7 +10,7 @@ from schemas.schemas import RunSessionCreate, RunSessionMetadataUpdate
 from core.services.signature.signature_store import invalidate_signature
 from core.services.run_weeks.builder import build_run_weeks
 from core.services.run_sessions.loader import load_run_sessions
-from core.services.session_type_predictor import predict_session_type
+from core.services.session_type_predictor import build_session_type_predictor
 
 router = APIRouter(prefix="/api")
 
@@ -96,10 +96,14 @@ def _upsert_run_session(db, payload: RunSessionCreate) -> str:
     return "inserted"
 
 
-def _serialize_session_metadata(db, session: RunSession) -> dict:
+def _serialize_session_metadata(
+    session: RunSession,
+    predictor=None,
+) -> dict:
     predicted = None
     if not session.session_type:
-        predicted = predict_session_type(db, session.user_id, session)
+        if predictor is not None:
+            predicted = predictor(session)
 
     effective = session.session_type or predicted
 
@@ -272,7 +276,8 @@ def get_run_sessions_metadata(
             .all()
         )
 
-        return [_serialize_session_metadata(db, session) for session in sessions]
+        predictor = build_session_type_predictor(db, user_id)
+        return [_serialize_session_metadata(session, predictor=predictor) for session in sessions]
     finally:
         db.close()
 
@@ -304,6 +309,7 @@ def update_run_session_metadata(payload: RunSessionMetadataUpdate):
         invalidate_signature(db, payload.user_id)
 
         db.refresh(session)
-        return _serialize_session_metadata(db, session)
+        predictor = build_session_type_predictor(db, payload.user_id)
+        return _serialize_session_metadata(session, predictor=predictor)
     finally:
         db.close()

@@ -3,7 +3,7 @@ import SwiftUI
 
 struct WeekChartView: View {
     let weeklyData: [DailyRunData]
-    let onSelect: (DailyRunData) -> Void
+    let onSelect: ([DailyRunData]) -> Void
 
     var body: some View {
         Chart(weeklyData) { dataPoint in
@@ -28,9 +28,14 @@ struct WeekChartView: View {
                     .onTapGesture { location in
                         let x = location.x - geo[proxy.plotAreaFrame].origin.x
 
-                        if let day: String = proxy.value(atX: x),
-                           let session = weeklyData.first(where: { $0.dayLabel == day }) {
-                            onSelect(session)
+                        if let day: String = proxy.value(atX: x) {
+                            let daySessions = weeklyData
+                                .filter { $0.dayLabel == day }
+                                .sorted { $0.date < $1.date }
+
+                            if !daySessions.isEmpty {
+                                onSelect(daySessions)
+                            }
                         }
                     }
             }

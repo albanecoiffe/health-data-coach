@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
@@ -82,15 +83,19 @@ def predict_session_type(
     user_id,
     target_session: RunSession,
 ) -> str | None:
-    if target_session.session_type and target_session.session_type.strip():
-        return target_session.session_type.strip()
+    predictor = build_session_type_predictor(db, user_id)
+    return predictor(target_session)
 
+
+def build_session_type_predictor(
+    db: Session,
+    user_id,
+) -> Callable[[RunSession], str | None]:
     labeled_sessions = (
         db.query(RunSession)
         .filter(
             RunSession.user_id == user_id,
             RunSession.session_type.isnot(None),
-            RunSession.start_time != target_session.start_time,
         )
         .all()
     )
@@ -109,7 +114,7 @@ def predict_session_type(
     eligible_labels = {label for label, count in label_counts.items() if count >= 3}
 
     if len(eligible_labels) < 2:
-        return _fallback_prediction(target_session)
+        return _fallback_prediction
 
     filtered_rows = [
         row for row, label in zip(training_rows, training_labels) if label in eligible_labels
@@ -119,7 +124,7 @@ def predict_session_type(
     ]
 
     if len(set(filtered_labels)) < 2:
-        return _fallback_prediction(target_session)
+        return _fallback_prediction
 
     classifier = Pipeline(
         [
@@ -131,11 +136,21 @@ def predict_session_type(
 
     X_train = pd.DataFrame(filtered_rows, columns=FEATURE_COLUMNS)
     y_train = pd.Series(filtered_labels)
-    X_target = pd.DataFrame([_build_feature_row(target_session)], columns=FEATURE_COLUMNS)
 
     try:
         classifier.fit(X_train, y_train)
-        prediction = classifier.predict(X_target)[0]
-        return str(prediction)
+
+        def _predict(target_session: RunSession) -> str | None:
+            if target_session.session_type and target_session.session_type.strip():
+                return target_session.session_type.strip()
+
+            X_target = pd.DataFrame([_build_feature_row(target_session)], columns=FEATURE_COLUMNS)
+            try:
+                prediction = classifier.predict(X_target)[0]
+                return str(prediction)
+            except Exception:
+                return _fallback_prediction(target_session)
+
+        return _predict
     except Exception:
-        return _fallback_prediction(target_session)
+        return _fallback_prediction

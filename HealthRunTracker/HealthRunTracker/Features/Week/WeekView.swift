@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var weekOffset: Int = 0
     @State private var previousWeekData: [DailyRunData] = []
     @State private var selectedSession: DailyRunData?
+    @State private var selectedDayRoute: DaySessionsRoute?
 
     var body: some View {
         NavigationStack {
@@ -55,8 +56,15 @@ struct ContentView: View {
 
                     WeekChartView(
                         weeklyData: healthManager.weeklyData,
-                        onSelect: { session in
-                            selectedSession = session
+                        onSelect: { sessions in
+                            if sessions.count == 1, let session = sessions.first {
+                                selectedSession = session
+                            } else if let firstSession = sessions.first {
+                                selectedDayRoute = DaySessionsRoute(
+                                    dayLabel: firstSession.dayLabel,
+                                    sessions: sessions
+                                )
+                            }
                         }
                     )
 
@@ -84,7 +92,23 @@ struct ContentView: View {
             .navigationDestination(item: $selectedSession) { session in
                 SessionDetailView(session: session)
             }
+            .navigationDestination(item: $selectedDayRoute) { route in
+                DaySessionsView(
+                    dayLabel: route.dayLabel,
+                    sessions: route.sessions
+                )
+            }
         }
+    }
+}
+
+private struct DaySessionsRoute: Identifiable, Hashable {
+    let dayLabel: String
+    let sessions: [DailyRunData]
+
+    var id: String {
+        let sessionIDs = sessions.map(\.id.uuidString).joined(separator: "-")
+        return "\(dayLabel)-\(sessionIDs)"
     }
 }
 
