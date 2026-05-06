@@ -36,3 +36,9 @@ class RunSessionMetadataUpdate(BaseModel):
     start_time: datetime
     session_type: Optional[str] = None
     session_detail: Optional[str] = None
+
+
+class RunSessionMergeRequest(BaseModel):
+    user_id: UUID
+    primary_start_time: datetime
+    secondary_start_time: datetime

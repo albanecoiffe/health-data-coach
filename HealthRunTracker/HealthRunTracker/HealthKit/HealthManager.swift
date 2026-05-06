@@ -81,7 +81,7 @@ final class HealthManager: ObservableObject {
             return (date, metadata)
         }
 
-        return sessions.map { session in
+        let enrichedSessions = sessions.map { session in
             let matched = metadataEntries
                 .map { entry in
                     (
@@ -111,11 +111,14 @@ final class HealthManager: ObservableObject {
                 z4: session.z4,
                 z5: session.z5,
                 heartRateTimeline: session.heartRateTimeline,
+                mergedIntoStartTime: metadata.mergedIntoStartDate,
                 sessionType: metadata.session_type,
                 predictedSessionType: metadata.predicted_session_type,
                 sessionDetail: metadata.session_detail
             )
         }
+
+        return collapseMergedSessions(enrichedSessions)
     }
 
     func updateSessionMetadata(
@@ -133,6 +136,16 @@ final class HealthManager: ObservableObject {
                 switch result {
                 case .success(let metadata):
                     self.weeklyData = self.applyMetadata([metadata], to: self.weeklyData)
+                    self.weeklyZoneBreakdown = self.weeklyData.map {
+                        SessionZoneBreakdown(
+                            workoutStart: $0.date,
+                            z1: $0.z1,
+                            z2: $0.z2,
+                            z3: $0.z3,
+                            z4: $0.z4,
+                            z5: $0.z5
+                        )
+                    }
                     self.sessionMetadataErrorText = ""
                     completion?(.success(()))
                 case .failure(let error):
@@ -149,32 +162,143 @@ final class HealthManager: ObservableObject {
     ) -> [DailyRunData] {
         let detailsByID = Dictionary(uniqueKeysWithValues: detailedSessions.map { ($0.id, $0) })
 
-        return sessions.map { session in
-            guard let detailed = detailsByID[session.id] else {
-                return session
+        return collapseMergedSessions(
+            sessions.map { session in
+                guard let detailed = detailsByID[session.id] else {
+                    return session
+                }
+
+                return DailyRunData(
+                    hkWorkout: detailed.hkWorkout,
+                    id: detailed.id,
+                    date: detailed.date,
+                    distanceKm: detailed.distanceKm,
+                    durationMin: detailed.durationMin,
+                    elevationGainM: detailed.elevationGainM,
+                    dayLabel: detailed.dayLabel,
+                    averageHeartRate: detailed.averageHeartRate,
+                    z1: detailed.z1,
+                    z2: detailed.z2,
+                    z3: detailed.z3,
+                    z4: detailed.z4,
+                    z5: detailed.z5,
+                    heartRateTimeline: detailed.heartRateTimeline,
+                    mergedIntoStartTime: session.mergedIntoStartTime,
+                    sessionType: session.sessionType,
+                    predictedSessionType: session.predictedSessionType,
+                    sessionDetail: session.sessionDetail
+                )
+            }
+            .sorted(by: { $0.date < $1.date })
+        )
+    }
+
+    func mergeSessions(
+        primary: DailyRunData,
+        secondary: DailyRunData,
+        completion: ((Result<Void, Error>) -> Void)? = nil
+    ) {
+        syncService.mergeSessions(
+            primaryStartDate: primary.date,
+            secondaryStartDate: secondary.date
+        ) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let metadataList):
+                    self.weeklyData = self.applyMetadata(metadataList, to: self.weeklyData)
+                    self.weeklyZoneBreakdown = self.weeklyData.map {
+                        SessionZoneBreakdown(
+                            workoutStart: $0.date,
+                            z1: $0.z1,
+                            z2: $0.z2,
+                            z3: $0.z3,
+                            z4: $0.z4,
+                            z5: $0.z5
+                        )
+                    }
+                    self.sessionMetadataErrorText = ""
+                    completion?(.success(()))
+                case .failure(let error):
+                    self.sessionMetadataErrorText = error.localizedDescription
+                    completion?(.failure(error))
+                }
+            }
+        }
+    }
+
+    private func collapseMergedSessions(_ sessions: [DailyRunData]) -> [DailyRunData] {
+        let sortedSessions = sessions.sorted(by: { $0.date < $1.date })
+
+        func matches(_ left: Date, _ right: Date) -> Bool {
+            abs(left.timeIntervalSince(right)) <= 180
+        }
+
+        var childrenByAnchor: [UUID: [DailyRunData]] = [:]
+        var hiddenSessionIDs = Set<UUID>()
+
+        for session in sortedSessions {
+            guard let mergedIntoStartTime = session.mergedIntoStartTime else { continue }
+
+            guard let anchor = sortedSessions.first(where: {
+                matches($0.date, mergedIntoStartTime) && $0.id != session.id
+            }) else {
+                continue
             }
 
-            return DailyRunData(
-                hkWorkout: detailed.hkWorkout,
-                id: detailed.id,
-                date: detailed.date,
-                distanceKm: detailed.distanceKm,
-                durationMin: detailed.durationMin,
-                elevationGainM: detailed.elevationGainM,
-                dayLabel: detailed.dayLabel,
-                averageHeartRate: detailed.averageHeartRate,
-                z1: detailed.z1,
-                z2: detailed.z2,
-                z3: detailed.z3,
-                z4: detailed.z4,
-                z5: detailed.z5,
-                heartRateTimeline: detailed.heartRateTimeline,
-                sessionType: session.sessionType,
-                predictedSessionType: session.predictedSessionType,
-                sessionDetail: session.sessionDetail
-            )
+            childrenByAnchor[anchor.id, default: []].append(session)
+            hiddenSessionIDs.insert(session.id)
         }
-        .sorted { $0.date < $1.date }
+
+        return sortedSessions.compactMap { session in
+            guard !hiddenSessionIDs.contains(session.id) else { return nil }
+            let children = childrenByAnchor[session.id] ?? []
+            guard !children.isEmpty else { return session }
+            return mergedSession(anchor: session, children: children)
+        }
+    }
+
+    private func mergedSession(anchor: DailyRunData, children: [DailyRunData]) -> DailyRunData {
+        let allSessions = ([anchor] + children).sorted(by: { $0.date < $1.date })
+        let totalDuration = allSessions.reduce(0.0) { $0 + $1.durationMin }
+        let weightedHR = allSessions.reduce(0.0) { partial, session in
+            partial + (resolvedAverageHeartRate(for: session) * session.durationMin)
+        }
+
+        return DailyRunData(
+            hkWorkout: anchor.hkWorkout,
+            id: anchor.id,
+            date: anchor.date,
+            distanceKm: allSessions.reduce(0.0) { $0 + $1.distanceKm },
+            durationMin: totalDuration,
+            elevationGainM: allSessions.reduce(0.0) { $0 + $1.elevationGainM },
+            dayLabel: anchor.dayLabel,
+            averageHeartRate: totalDuration > 0 ? weightedHR / totalDuration : anchor.averageHeartRate,
+            z1: allSessions.reduce(0.0) { $0 + $1.z1 },
+            z2: allSessions.reduce(0.0) { $0 + $1.z2 },
+            z3: allSessions.reduce(0.0) { $0 + $1.z3 },
+            z4: allSessions.reduce(0.0) { $0 + $1.z4 },
+            z5: allSessions.reduce(0.0) { $0 + $1.z5 },
+            heartRateTimeline: allSessions
+                .flatMap(\.heartRateTimeline)
+                .sorted(by: { $0.timeOffset < $1.timeOffset }),
+            mergedIntoStartTime: nil,
+            sessionType: anchor.sessionType,
+            predictedSessionType: anchor.predictedSessionType,
+            sessionDetail: anchor.sessionDetail
+        )
+    }
+
+    private func resolvedAverageHeartRate(for session: DailyRunData) -> Double {
+        if session.averageHeartRate > 0 {
+            return session.averageHeartRate
+        }
+
+        guard !session.heartRateTimeline.isEmpty else {
+            return 0
+        }
+
+        let bpmSum = session.heartRateTimeline.reduce(0.0) { $0 + $1.bpm }
+        return bpmSum / Double(session.heartRateTimeline.count)
     }
 
     func refreshMetadata(for session: DailyRunData) {
@@ -192,6 +316,16 @@ final class HealthManager: ObservableObject {
                 switch result {
                 case .success(let metadataList):
                     self.weeklyData = self.applyMetadata(metadataList, to: self.weeklyData)
+                    self.weeklyZoneBreakdown = self.weeklyData.map {
+                        SessionZoneBreakdown(
+                            workoutStart: $0.date,
+                            z1: $0.z1,
+                            z2: $0.z2,
+                            z3: $0.z3,
+                            z4: $0.z4,
+                            z5: $0.z5
+                        )
+                    }
                     self.sessionMetadataErrorText = ""
                 case .failure(let error):
                     self.sessionMetadataErrorText = error.localizedDescription
@@ -334,7 +468,7 @@ final class HealthManager: ObservableObject {
 
             group.notify(queue: .main) {
                 completion(
-                    sessions.sorted { $0.startDate < $1.startDate }
+                    sessions.sorted(by: { $0.startDate < $1.startDate })
                 )
             }
         }

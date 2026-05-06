@@ -71,6 +71,7 @@ extension HealthManager {
                         z4: zones?.z4 ?? 0,
                         z5: zones?.z5 ?? 0,
                         heartRateTimeline: [],
+                        mergedIntoStartTime: nil,
                         sessionType: nil,
                         predictedSessionType: nil,
                         sessionDetail: nil
@@ -135,6 +136,7 @@ extension HealthManager {
                     averageHeartRate: avgHR,
                     z1: 0, z2: 0, z3: 0, z4: 0, z5: 0,
                     heartRateTimeline: [],
+                    mergedIntoStartTime: nil,
                     sessionType: nil,
                     predictedSessionType: nil,
                     sessionDetail: nil

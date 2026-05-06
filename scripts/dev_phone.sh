@@ -14,6 +14,7 @@ SCHEME="${HEALTHCOACH_SCHEME:-HealthRunTracker}"
 DERIVED_DATA_PATH="${HEALTHCOACH_DERIVED_DATA:-/tmp/HealthCoachDerivedData}"
 APP_PATH="$DERIVED_DATA_PATH/Build/Products/Debug-iphoneos/HealthRunTracker.app"
 ALLOW_PROVISIONING_UPDATES="${HEALTHCOACH_ALLOW_PROVISIONING_UPDATES:-1}"
+REQUIRE_DEVICE_SUCCESS="${HEALTHCOACH_REQUIRE_DEVICE_SUCCESS:-0}"
 
 echo "Backend URL: $BASE_URL"
 
@@ -114,14 +115,33 @@ fi
 if [[ -z "$device_id" ]]; then
   echo "Aucun iPhone disponible. Branche/deverrouille le telephone ou definis HEALTHCOACH_DEVICE_ID."
   DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl list devices || true
-  exit 1
+  if [[ "$REQUIRE_DEVICE_SUCCESS" == "1" ]]; then
+    exit 1
+  fi
+  echo
+  echo "Pret partiellement."
+  echo "Backend: $BASE_URL"
+  echo "Build iOS: OK"
+  echo "Installation iPhone: non effectuee"
+  echo "Pour suivre les logs: tail -f '$BACKEND_LOG'"
+  exit 0
 fi
 
 echo "Installation sur iPhone: $device_id"
 if ! run_with_retry "Installation" env DEVELOPER_DIR="$XCODE_DEV_DIR" xcrun devicectl device install app --device "$device_id" "$APP_PATH"; then
   echo "Installation impossible via devicectl."
   echo "Actions utiles: deverrouiller l'iPhone, verifier le cable/Wi-Fi, accepter 'Faire confiance', puis relancer ./scripts/dev_phone.sh."
-  exit 1
+  if [[ "$REQUIRE_DEVICE_SUCCESS" == "1" ]]; then
+    exit 1
+  fi
+  echo
+  echo "Pret partiellement."
+  echo "Backend: $BASE_URL"
+  echo "Build iOS: OK"
+  echo "Installation iPhone: echec devicectl"
+  echo "Tu peux lancer l'app manuellement si elle est deja installee, ou faire un Run depuis Xcode."
+  echo "Pour suivre les logs: tail -f '$BACKEND_LOG'"
+  exit 0
 fi
 
 echo "Lancement de l'app..."

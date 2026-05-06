@@ -20,6 +20,7 @@ struct DailyRunData: Identifiable, Hashable {
     let z5: Double
     
     let heartRateTimeline: [HeartRateSample]
+    let mergedIntoStartTime: Date?
     let sessionType: String?
     let predictedSessionType: String?
     let sessionDetail: String?

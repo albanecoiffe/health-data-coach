@@ -1,12 +1,13 @@
 # import
 from fastapi import APIRouter, HTTPException, Query, Request
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from api.auth import assert_import_token
 from database import SessionLocal
 from core.models.RunSession import RunSession
-from schemas.schemas import RunSessionCreate, RunSessionMetadataUpdate
+from core.models.RunSessionMergeAlias import RunSessionMergeAlias
+from schemas.schemas import RunSessionCreate, RunSessionMergeRequest, RunSessionMetadataUpdate
 from core.services.signature.signature_store import invalidate_signature
 from core.services.run_weeks.builder import build_run_weeks
 from core.services.run_sessions.loader import load_run_sessions
@@ -19,6 +20,7 @@ def _create_run_session_from_payload(payload: RunSessionCreate) -> RunSession:
     return RunSession(
         user_id=payload.user_id,
         start_time=payload.start_time,
+        merged_into_start_time=None,
         distance_km=payload.distance_km,
         duration_min=payload.duration_min,
         avg_hr=payload.avg_hr,
@@ -75,6 +77,18 @@ def _session_matches_payload(session: RunSession, payload: RunSessionCreate) -> 
 
 
 def _upsert_run_session(db, payload: RunSessionCreate) -> str:
+    aliased_source = (
+        db.query(RunSessionMergeAlias.id)
+        .filter(
+            RunSessionMergeAlias.user_id == payload.user_id,
+            RunSessionMergeAlias.source_start_time == payload.start_time,
+        )
+        .first()
+        is not None
+    )
+    if aliased_source:
+        return "duplicate"
+
     existing = (
         db.query(RunSession)
         .filter(
@@ -85,6 +99,26 @@ def _upsert_run_session(db, payload: RunSessionCreate) -> str:
     )
 
     if existing:
+        has_merged_children = (
+            db.query(RunSession.id)
+            .filter(
+                RunSession.user_id == payload.user_id,
+                RunSession.merged_into_start_time == payload.start_time,
+            )
+            .first()
+            is not None
+        )
+        has_merge_alias_children = (
+            db.query(RunSessionMergeAlias.id)
+            .filter(
+                RunSessionMergeAlias.user_id == payload.user_id,
+                RunSessionMergeAlias.target_start_time == payload.start_time,
+            )
+            .first()
+            is not None
+        )
+        if has_merged_children or has_merge_alias_children:
+            return "duplicate"
         if _session_matches_payload(existing, payload):
             return "duplicate"
         _apply_payload_to_session(existing, payload)
@@ -109,11 +143,86 @@ def _serialize_session_metadata(
 
     return {
         "start_time": session.start_time.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "merged_into_start_time": (
+            session.merged_into_start_time.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+            if session.merged_into_start_time
+            else None
+        ),
         "session_type": session.session_type,
         "predicted_session_type": predicted,
         "effective_session_type": effective,
         "session_detail": session.session_detail,
     }
+
+
+def _serialize_merge_alias_metadata(alias: RunSessionMergeAlias) -> dict:
+    return {
+        "start_time": alias.source_start_time.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "merged_into_start_time": alias.target_start_time.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "session_type": None,
+        "predicted_session_type": None,
+        "effective_session_type": None,
+        "session_detail": None,
+    }
+
+
+def _merge_two_run_sessions(primary: RunSession, secondary: RunSession) -> None:
+    primary_distance = float(primary.distance_km or 0.0)
+    secondary_distance = float(secondary.distance_km or 0.0)
+    primary_duration = float(primary.duration_min or 0.0)
+    secondary_duration = float(secondary.duration_min or 0.0)
+    total_duration = primary_duration + secondary_duration
+
+    weighted_hr_sum = 0.0
+    if primary.avg_hr is not None:
+        weighted_hr_sum += float(primary.avg_hr) * primary_duration
+    if secondary.avg_hr is not None:
+        weighted_hr_sum += float(secondary.avg_hr) * secondary_duration
+
+    primary.distance_km = primary_distance + secondary_distance
+    primary.duration_min = total_duration
+    primary.avg_hr = (weighted_hr_sum / total_duration) if total_duration > 0 else primary.avg_hr
+    primary.elevation_m = float(primary.elevation_m or 0.0) + float(secondary.elevation_m or 0.0)
+    primary.active_kcal = float(primary.active_kcal or 0.0) + float(secondary.active_kcal or 0.0)
+    primary.z1_min = float(primary.z1_min or 0.0) + float(secondary.z1_min or 0.0)
+    primary.z2_min = float(primary.z2_min or 0.0) + float(secondary.z2_min or 0.0)
+    primary.z3_min = float(primary.z3_min or 0.0) + float(secondary.z3_min or 0.0)
+    primary.z4_min = float(primary.z4_min or 0.0) + float(secondary.z4_min or 0.0)
+    primary.z5_min = float(primary.z5_min or 0.0) + float(secondary.z5_min or 0.0)
+
+    if not (primary.session_type and primary.session_type.strip()):
+        primary.session_type = secondary.session_type
+    if not (primary.session_detail and primary.session_detail.strip()):
+        primary.session_detail = secondary.session_detail
+
+    primary.merged_into_start_time = None
+    secondary.merged_into_start_time = primary.start_time
+
+
+def _match_session_by_start_time(
+    sessions: list[RunSession],
+    target_start_time: datetime,
+    excluded_ids: set | None = None,
+    tolerance_seconds: int = 180,
+) -> RunSession | None:
+    def _as_utc_naive(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    excluded_ids = excluded_ids or set()
+    target_utc_naive = _as_utc_naive(target_start_time)
+    candidates = [
+        session for session in sessions
+        if session.id not in excluded_ids
+        and abs((_as_utc_naive(session.start_time) - target_utc_naive).total_seconds()) <= tolerance_seconds
+    ]
+    if not candidates:
+        return None
+    return min(
+        candidates,
+        key=lambda session: abs((_as_utc_naive(session.start_time) - target_utc_naive).total_seconds()),
+    )
 
 
 # ======================================================
@@ -275,9 +384,22 @@ def get_run_sessions_metadata(
             .order_by(RunSession.start_time.asc())
             .all()
         )
+        merge_aliases = (
+            db.query(RunSessionMergeAlias)
+            .filter(
+                RunSessionMergeAlias.user_id == user_id,
+                RunSessionMergeAlias.source_start_time >= start_dt,
+                RunSessionMergeAlias.source_start_time < end_dt,
+            )
+            .order_by(RunSessionMergeAlias.source_start_time.asc())
+            .all()
+        )
 
         predictor = build_session_type_predictor(db, user_id)
-        return [_serialize_session_metadata(session, predictor=predictor) for session in sessions]
+        return [
+            *[_serialize_session_metadata(session, predictor=predictor) for session in sessions],
+            *[_serialize_merge_alias_metadata(alias) for alias in merge_aliases],
+        ]
     finally:
         db.close()
 
@@ -311,5 +433,69 @@ def update_run_session_metadata(payload: RunSessionMetadataUpdate):
         db.refresh(session)
         predictor = build_session_type_predictor(db, payload.user_id)
         return _serialize_session_metadata(session, predictor=predictor)
+    finally:
+        db.close()
+
+
+@router.post("/run-sessions/merge")
+def merge_run_sessions(payload: RunSessionMergeRequest):
+    db = SessionLocal()
+    try:
+        if payload.primary_start_time == payload.secondary_start_time:
+            raise HTTPException(status_code=400, detail="Cannot merge the same session twice")
+
+        primary, secondary = sorted(
+            [payload.primary_start_time, payload.secondary_start_time]
+        )
+
+        tolerance = timedelta(minutes=3)
+        sessions = (
+            db.query(RunSession)
+            .filter(
+                RunSession.user_id == payload.user_id,
+                RunSession.start_time >= primary - tolerance,
+                RunSession.start_time <= secondary + tolerance,
+            )
+            .order_by(RunSession.start_time.asc())
+            .all()
+        )
+
+        if len(sessions) != 2:
+            raise HTTPException(status_code=404, detail="Run sessions not found in merge window")
+
+        primary_session = _match_session_by_start_time(sessions, primary)
+        if primary_session is None:
+            raise HTTPException(status_code=404, detail="Primary run session not found")
+
+        secondary_session = _match_session_by_start_time(
+            sessions,
+            secondary,
+            excluded_ids={primary_session.id},
+        )
+        if secondary_session is None:
+            raise HTTPException(status_code=404, detail="Secondary run session not found")
+
+        if primary_session.merged_into_start_time is not None or secondary_session.merged_into_start_time is not None:
+            raise HTTPException(status_code=400, detail="One of the sessions is already merged")
+
+        _merge_two_run_sessions(primary_session, secondary_session)
+        merge_alias = RunSessionMergeAlias(
+            user_id=payload.user_id,
+            source_start_time=secondary_session.start_time,
+            target_start_time=primary_session.start_time,
+        )
+        db.add(merge_alias)
+        db.delete(secondary_session)
+        db.commit()
+
+        build_run_weeks(db, payload.user_id, touched_dates=[primary, secondary])
+        invalidate_signature(db, payload.user_id)
+        predictor = build_session_type_predictor(db, payload.user_id)
+        db.refresh(primary_session)
+
+        return [
+            _serialize_session_metadata(primary_session, predictor=predictor),
+            _serialize_merge_alias_metadata(merge_alias),
+        ]
     finally:
         db.close()

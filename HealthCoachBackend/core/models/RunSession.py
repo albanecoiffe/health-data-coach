@@ -35,6 +35,11 @@ class RunSession(Base):
         nullable=False,
         index=True,
     )
+    merged_into_start_time = Column(
+        DateTime,
+        nullable=True,
+        index=True,
+    )
 
     # -----------------------------
     # Données globales

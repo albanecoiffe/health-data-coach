@@ -96,6 +96,7 @@ def build_session_type_predictor(
         .filter(
             RunSession.user_id == user_id,
             RunSession.session_type.isnot(None),
+            RunSession.merged_into_start_time.is_(None),
         )
         .all()
     )

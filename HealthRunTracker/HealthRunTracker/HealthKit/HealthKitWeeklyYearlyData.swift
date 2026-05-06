@@ -78,12 +78,13 @@ extension HealthManager {
                     z4: 0,
                     z5: 0,
                     heartRateTimeline: [],
+                    mergedIntoStartTime: nil,
                     sessionType: nil,
                     predictedSessionType: nil,
                     sessionDetail: nil
                 )
             }
-            .sorted { $0.date < $1.date }
+            .sorted(by: { $0.date < $1.date })
 
             DispatchQueue.main.async {
                 guard self.isCurrentWeeklyRequest(requestID) else { return }
@@ -180,6 +181,7 @@ extension HealthManager {
                         z4: zones?.z4 ?? 0,
                         z5: zones?.z5 ?? 0,
                         heartRateTimeline: timeline,
+                        mergedIntoStartTime: nil,
                         sessionType: nil,
                         predictedSessionType: nil,
                         sessionDetail: nil
@@ -299,7 +301,7 @@ extension HealthManager {
 
             DispatchQueue.main.async {
                 self?.dailyDistances = daily
-                self?.yearlyData = monthlyDict.values.sorted { $0.month < $1.month }
+                self?.yearlyData = monthlyDict.values.sorted(by: { $0.month < $1.month })
                 self?.yearlySessionCount = workouts.count
                 self?.updateTrainingLoad()
             }

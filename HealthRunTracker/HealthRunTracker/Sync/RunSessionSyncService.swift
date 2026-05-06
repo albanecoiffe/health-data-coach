@@ -16,6 +16,7 @@ struct RunSessionLatestResponse: Codable {
 
 struct RunSessionMetadata: Codable {
     let start_time: String
+    let merged_into_start_time: String?
     let session_type: String?
     let predicted_session_type: String?
     let effective_session_type: String?
@@ -24,6 +25,11 @@ struct RunSessionMetadata: Codable {
     var startDate: Date? {
         ISO8601DateFormatter().date(from: start_time)
     }
+
+    var mergedIntoStartDate: Date? {
+        guard let merged_into_start_time else { return nil }
+        return ISO8601DateFormatter().date(from: merged_into_start_time)
+    }
 }
 
 struct RunSessionMetadataUpdatePayload: Codable {
@@ -31,6 +37,12 @@ struct RunSessionMetadataUpdatePayload: Codable {
     let start_time: String
     let session_type: String?
     let session_detail: String?
+}
+
+struct RunSessionMergePayload: Codable {
+    let user_id: String
+    let primary_start_time: String
+    let secondary_start_time: String
 }
 
 final class RunSessionSyncService {
@@ -375,6 +387,59 @@ final class RunSessionSyncService {
 
             do {
                 let decoded = try JSONDecoder().decode(RunSessionMetadata.self, from: data)
+                completion(.success(decoded))
+            } catch {
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+
+    func mergeSessions(
+        primaryStartDate: Date,
+        secondaryStartDate: Date,
+        completion: @escaping (Result<[RunSessionMetadata], Error>) -> Void
+    ) {
+        guard let url = URL(string: "\(baseURL)/api/run-sessions/merge") else {
+            completion(.failure(NSError(domain: "sync", code: -1)))
+            return
+        }
+
+        let formatter = ISO8601DateFormatter()
+        let payload = RunSessionMergePayload(
+            user_id: userId,
+            primary_start_time: formatter.string(from: primaryStartDate),
+            secondary_start_time: formatter.string(from: secondaryStartDate)
+        )
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONEncoder().encode(payload)
+
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            guard let http = response as? HTTPURLResponse else {
+                completion(.failure(NSError(domain: "sync", code: -2)))
+                return
+            }
+
+            guard 200..<300 ~= http.statusCode else {
+                completion(.failure(NSError(domain: "sync", code: http.statusCode)))
+                return
+            }
+
+            guard let data else {
+                completion(.failure(NSError(domain: "sync", code: -3)))
+                return
+            }
+
+            do {
+                let decoded = try JSONDecoder().decode([RunSessionMetadata].self, from: data)
                 completion(.success(decoded))
             } catch {
                 completion(.failure(error))
