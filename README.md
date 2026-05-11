@@ -78,6 +78,9 @@ Fonctions principales :
 - récupération des distances, durées, fréquences cardiaques, calories, dénivelé et traces GPS
 - calcul des zones cardiaques Z1 à Z5
 - vue semaine avec statistiques, graphe distance et zones cardiaques
+- détail d'une séance avec catégorie affichée ou prédite
+- saisie utilisateur de la catégorie et du détail de séance
+- fusion optionnelle de deux séances du même jour quand il s'agit d'un arrêt/reprise accidentel
 - vue année
 - vue carte des parcours
 - chat avec le coach backend
@@ -101,6 +104,9 @@ Routes importantes :
 - `GET /` : vérification simple du backend
 - `GET /health/db` : vérification de la connexion base de données
 - `POST /api/run-sessions/batch` : réception des séances envoyées par l'app iOS
+- `GET /api/run-sessions/metadata` : métadonnées de séance, catégorie persistée, prédiction et détails
+- `PATCH /api/run-sessions/metadata` : mise à jour utilisateur de `session_type` et `session_detail`
+- `POST /api/run-sessions/merge` : fusion de deux séances proches dans le temps
 - routes de chat, imports, séances et signatures dans `HealthCoachBackend/api/`
 
 Au démarrage, le backend reconstruit certaines agrégations si nécessaire et lance aussi les tâches d'import CSV existantes.
@@ -111,6 +117,12 @@ Depuis la racine du projet, la commande la plus simple est :
 
 ```bash
 ./scripts/dev_phone.sh
+```
+
+Ou via `make` :
+
+```bash
+make phone
 ```
 
 Elle automatise le flux de développement local :
@@ -130,6 +142,16 @@ Depuis la racine du projet :
 ```bash
 cd HealthCoachBackend
 venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Raccourcis utiles depuis la racine :
+
+```bash
+make backend
+make backend-log
+make backend-stop
+make streamlit
+make streamlit-8502
 ```
 
 L'app iOS choisit maintenant son URL selon l'environnement :
@@ -209,6 +231,97 @@ Une synchronisation réussie se voit dans les logs backend avec :
 ```text
 POST /api/run-sessions/batch HTTP/1.1 200 OK
 ```
+
+## Métadonnées de séance
+
+Chaque séance peut maintenant porter deux champs métier :
+
+- `session_type` : catégorie validée par l'utilisateur (`footing`, `fractionné`, `sortie longue`, etc.)
+- `session_detail` : détail libre de la séance, par exemple `6x400 R100 4:20/km`
+
+Comportement actuel :
+
+- si `session_type` existe déjà en base, l'écran détail affiche la séance en lecture seule
+- si `session_type` est vide, le backend renvoie une `predicted_session_type`
+- l'utilisateur peut confirmer ou corriger la catégorie puis saisir `session_detail`
+- la validation persiste les données en base via `PATCH /api/run-sessions/metadata`
+
+La prédiction actuelle côté backend est volontairement simple :
+
+- entraînement à la volée d'une `LogisticRegression` sur les séances déjà labellisées du même utilisateur
+- fallback heuristique si le volume de labels est insuffisant
+
+Cette prédiction sert d'aide à la saisie. Le label de vérité reste celui validé par l'utilisateur.
+
+## Fusion de séances
+
+La vue semaine permet de sélectionner un jour contenant plusieurs séances.
+Si le jour contient exactement deux séances, l'app propose une fusion explicite.
+
+Cas d'usage :
+
+- arrêt/reprise accidentel d'une même sortie
+- découpage HealthKit parasite alors qu'il n'y a qu'une seule vraie séance
+
+Principe de fusion :
+
+- une séance `anchor` est conservée
+- la seconde séance est absorbée dans l'anchor
+- l'app n'affiche ensuite plus qu'une seule séance logique
+
+Important :
+
+- la fusion doit rester optionnelle, car deux séances le même jour peuvent être normales
+- la fusion n'est pas destinée à remplacer une modélisation plus avancée des "vraies séances"
+
+## Migrations SQL requises
+
+Certaines fonctionnalités récentes nécessitent des migrations manuelles dans Neon.
+
+Colonnes `session_type` et `session_detail` :
+
+```sql
+ALTER TABLE run_sessions
+ADD COLUMN IF NOT EXISTS session_type TEXT;
+
+ALTER TABLE run_sessions
+ADD COLUMN IF NOT EXISTS session_detail TEXT;
+```
+
+Colonne technique de fusion :
+
+```sql
+ALTER TABLE run_sessions
+ADD COLUMN IF NOT EXISTS merged_into_start_time TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_run_sessions_merged_into_start_time
+ON run_sessions (merged_into_start_time);
+```
+
+Table d'alias de fusion :
+
+Cette table mémorise qu'une séance HealthKit brute a déjà été absorbée dans une autre, afin d'éviter sa recréation au prochain sync si l'on choisit de ne garder qu'une seule ligne finale dans `run_sessions`.
+
+```sql
+CREATE TABLE IF NOT EXISTS run_session_merge_aliases (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  source_start_time TIMESTAMP NOT NULL,
+  target_start_time TIMESTAMP NOT NULL,
+  CONSTRAINT uq_run_merge_alias_user_source UNIQUE (user_id, source_start_time)
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_session_merge_aliases_user_id
+ON run_session_merge_aliases (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_run_session_merge_aliases_source_start_time
+ON run_session_merge_aliases (source_start_time);
+
+CREATE INDEX IF NOT EXISTS idx_run_session_merge_aliases_target_start_time
+ON run_session_merge_aliases (target_start_time);
+```
+
+Sans cette table d'alias, une séance supprimée après fusion risque d'être recréée plus tard par le flux de synchronisation HealthKit.
 
 ## Qualité des données exportées
 

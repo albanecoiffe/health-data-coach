@@ -8,7 +8,7 @@ Elle lit les donnees de course depuis Apple Health via HealthKit, affiche les vu
 
 - macOS avec Xcode installe
 - un iPhone physique pour tester HealthKit
-- le backend `HealthCoachBackend` lance sur le meme reseau local en Debug, ou l'API Render en Release
+- l'API Render est utilisee par defaut, ou le backend `HealthCoachBackend` lance sur le meme reseau local si une surcharge locale est configuree
 - les autorisations HealthKit acceptees au premier lancement
 
 HealthKit ne fournit pas les vraies donnees Apple Health dans le simulateur. Pour tester les seances, les zones cardiaques et les traces GPS, utiliser l'iPhone.
@@ -52,17 +52,20 @@ Configuration actuelle :
 ```swift
 enum APIConfig {
     static let baseURL: String = {
-        #if DEBUG
-        return "http://MacBook-Pro-de-Albane.local:8000"
-        #else
         return "https://healthcoach-api.onrender.com"
-        #endif
     }()
 }
 ```
 
-Le hostname `.local` evite de modifier l'app quand l'adresse IP Wi-Fi du Mac change en developpement.
-En Release, l'app cible l'API Render. Les deux valeurs peuvent etre surchargees par les build settings `HEALTHCOACH_API_BASE_URL` et `HEALTHCOACH_IMPORT_TOKEN`, exposes dans `Info.plist`.
+L'app cible maintenant l'API Render par defaut, y compris en Debug.
+Pour developper contre le backend local sans toucher au code, utiliser `HealthRunTracker/Config/LocalSecrets.xcconfig` avec par exemple :
+
+```xcconfig
+HEALTHCOACH_API_SCHEME = http
+HEALTHCOACH_API_HOST = MacBook-Pro-de-Albane.local:8000
+```
+
+Le hostname `.local` reste utile en developpement local pour eviter de modifier l'adresse IP Wi-Fi du Mac. Les valeurs peuvent etre surchargees par les build settings `HEALTHCOACH_API_BASE_URL` et `HEALTHCOACH_IMPORT_TOKEN`, exposes dans `Info.plist`.
 
 Le token n'est envoye que sur les routes d'ingestion. Si le backend definit `IMPORT_API_TOKEN`, l'app doit etre build avec le meme `HEALTHCOACH_IMPORT_TOKEN`.
 
@@ -151,7 +154,7 @@ HealthRunTracker/HealthRunTracker/
 ## Points d'attention
 
 - Tester HealthKit sur iPhone, pas dans le simulateur.
-- Garder le fallback Debug local et configurer `HEALTHCOACH_API_BASE_URL` seulement si l'URL doit changer.
+- Laisser le fallback par defaut sur l'API Render, et utiliser `LocalSecrets.xcconfig` pour pointer vers le backend local si besoin.
 - Si `IMPORT_API_TOKEN` est active cote backend, fournir le meme token via `HEALTHCOACH_IMPORT_TOKEN` au build iOS.
 - Verifier les logs backend apres lancement : une sync reussie affiche des `POST /api/run-sessions/batch` avec un status `200 OK`.
 - Eviter de modifier en meme temps la lecture HealthKit et l'export Neon sans recompiler et tester sur l'iPhone.

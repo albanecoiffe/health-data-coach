@@ -17,6 +17,7 @@ struct RunSessionLatestResponse: Codable {
 struct RunSessionMetadata: Codable {
     let start_time: String
     let merged_into_start_time: String?
+    let avg_hr: Double?
     let session_type: String?
     let predicted_session_type: String?
     let effective_session_type: String?
@@ -49,6 +50,7 @@ final class RunSessionSyncService {
 
     let baseURL: String
     let userId: String
+    private let hostedFallbackBaseURL = "https://healthcoach-api.onrender.com"
 
     init(baseURL: String, userId: String) {
         self.baseURL = baseURL
@@ -58,6 +60,26 @@ final class RunSessionSyncService {
     private func applyImportToken(to request: inout URLRequest) {
         guard let token = APIConfig.importToken else { return }
         request.setValue(token, forHTTPHeaderField: "X-Import-Token")
+    }
+
+    private var canRetryOnHostedAPI: Bool {
+        baseURL != hostedFallbackBaseURL
+    }
+
+    private func shouldRetryOnHostedAPI(for error: Error) -> Bool {
+        guard canRetryOnHostedAPI, let urlError = error as? URLError else { return false }
+
+        switch urlError.code {
+        case .cannotFindHost,
+             .cannotConnectToHost,
+             .dnsLookupFailed,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .timedOut:
+            return true
+        default:
+            return false
+        }
     }
 
     func pingBackend(completion: @escaping (Result<String, Error>) -> Void) {
@@ -286,57 +308,64 @@ final class RunSessionSyncService {
         endDate: Date,
         completion: @escaping (Result<[RunSessionMetadata], Error>) -> Void
     ) {
-        var components = URLComponents(string: "\(baseURL)/api/run-sessions/metadata")
-
         let dateFormatter = DateFormatter()
         dateFormatter.calendar = Calendar(identifier: .gregorian)
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
         dateFormatter.timeZone = Calendar.current.timeZone
         dateFormatter.dateFormat = "yyyy-MM-dd"
 
-        components?.queryItems = [
-            URLQueryItem(name: "user_id", value: userId),
-            URLQueryItem(name: "start_date", value: dateFormatter.string(from: startDate)),
-            URLQueryItem(name: "end_date", value: dateFormatter.string(from: endDate))
-        ]
+        func performRequest(using requestBaseURL: String, allowsRetry: Bool) {
+            var components = URLComponents(string: "\(requestBaseURL)/api/run-sessions/metadata")
+            components?.queryItems = [
+                URLQueryItem(name: "user_id", value: userId),
+                URLQueryItem(name: "start_date", value: dateFormatter.string(from: startDate)),
+                URLQueryItem(name: "end_date", value: dateFormatter.string(from: endDate))
+            ]
 
-        guard let url = components?.url else {
-            completion(.failure(NSError(domain: "sync", code: -1)))
-            return
+            guard let url = components?.url else {
+                completion(.failure(NSError(domain: "sync", code: -1)))
+                return
+            }
+
+            var req = URLRequest(url: url)
+            req.httpMethod = "GET"
+            req.timeoutInterval = 45
+
+            URLSession.shared.dataTask(with: req) { data, response, error in
+                if let error = error {
+                    if allowsRetry, self.shouldRetryOnHostedAPI(for: error) {
+                        performRequest(using: self.hostedFallbackBaseURL, allowsRetry: false)
+                        return
+                    }
+                    completion(.failure(error))
+                    return
+                }
+
+                guard let http = response as? HTTPURLResponse else {
+                    completion(.failure(NSError(domain: "sync", code: -2)))
+                    return
+                }
+
+                guard 200..<300 ~= http.statusCode else {
+                    completion(.failure(NSError(domain: "sync", code: http.statusCode)))
+                    return
+                }
+
+                guard let data else {
+                    completion(.success([]))
+                    return
+                }
+
+                do {
+                    let decoded = try JSONDecoder().decode([RunSessionMetadata].self, from: data)
+                    completion(.success(decoded))
+                } catch {
+                    completion(.failure(error))
+                }
+            }.resume()
         }
 
-        var req = URLRequest(url: url)
-        req.httpMethod = "GET"
-        req.timeoutInterval = 45
-
-        URLSession.shared.dataTask(with: req) { data, response, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-
-            guard let http = response as? HTTPURLResponse else {
-                completion(.failure(NSError(domain: "sync", code: -2)))
-                return
-            }
-
-            guard 200..<300 ~= http.statusCode else {
-                completion(.failure(NSError(domain: "sync", code: http.statusCode)))
-                return
-            }
-
-            guard let data else {
-                completion(.success([]))
-                return
-            }
-
-            do {
-                let decoded = try JSONDecoder().decode([RunSessionMetadata].self, from: data)
-                completion(.success(decoded))
-            } catch {
-                completion(.failure(error))
-            }
-        }.resume()
+        performRequest(using: baseURL, allowsRetry: true)
     }
 
     func updateSessionMetadata(
@@ -345,11 +374,6 @@ final class RunSessionSyncService {
         sessionDetail: String?,
         completion: @escaping (Result<RunSessionMetadata, Error>) -> Void
     ) {
-        guard let url = URL(string: "\(baseURL)/api/run-sessions/metadata") else {
-            completion(.failure(NSError(domain: "sync", code: -1)))
-            return
-        }
-
         let formatter = ISO8601DateFormatter()
         let payload = RunSessionMetadataUpdatePayload(
             user_id: userId,
@@ -358,40 +382,53 @@ final class RunSessionSyncService {
             session_detail: sessionDetail
         )
 
-        var req = URLRequest(url: url)
-        req.httpMethod = "PATCH"
-        req.timeoutInterval = 30
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONEncoder().encode(payload)
-
-        URLSession.shared.dataTask(with: req) { data, response, error in
-            if let error = error {
-                completion(.failure(error))
+        func performRequest(using requestBaseURL: String, allowsRetry: Bool) {
+            guard let url = URL(string: "\(requestBaseURL)/api/run-sessions/metadata") else {
+                completion(.failure(NSError(domain: "sync", code: -1)))
                 return
             }
 
-            guard let http = response as? HTTPURLResponse else {
-                completion(.failure(NSError(domain: "sync", code: -2)))
-                return
-            }
+            var req = URLRequest(url: url)
+            req.httpMethod = "PATCH"
+            req.timeoutInterval = 30
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONEncoder().encode(payload)
 
-            guard 200..<300 ~= http.statusCode else {
-                completion(.failure(NSError(domain: "sync", code: http.statusCode)))
-                return
-            }
+            URLSession.shared.dataTask(with: req) { data, response, error in
+                if let error = error {
+                    if allowsRetry, self.shouldRetryOnHostedAPI(for: error) {
+                        performRequest(using: self.hostedFallbackBaseURL, allowsRetry: false)
+                        return
+                    }
+                    completion(.failure(error))
+                    return
+                }
 
-            guard let data else {
-                completion(.failure(NSError(domain: "sync", code: -3)))
-                return
-            }
+                guard let http = response as? HTTPURLResponse else {
+                    completion(.failure(NSError(domain: "sync", code: -2)))
+                    return
+                }
 
-            do {
-                let decoded = try JSONDecoder().decode(RunSessionMetadata.self, from: data)
-                completion(.success(decoded))
-            } catch {
-                completion(.failure(error))
-            }
-        }.resume()
+                guard 200..<300 ~= http.statusCode else {
+                    completion(.failure(NSError(domain: "sync", code: http.statusCode)))
+                    return
+                }
+
+                guard let data else {
+                    completion(.failure(NSError(domain: "sync", code: -3)))
+                    return
+                }
+
+                do {
+                    let decoded = try JSONDecoder().decode(RunSessionMetadata.self, from: data)
+                    completion(.success(decoded))
+                } catch {
+                    completion(.failure(error))
+                }
+            }.resume()
+        }
+
+        performRequest(using: baseURL, allowsRetry: true)
     }
 
     func mergeSessions(

@@ -148,6 +148,7 @@ def _serialize_session_metadata(
             if session.merged_into_start_time
             else None
         ),
+        "avg_hr": float(session.avg_hr) if session.avg_hr is not None else None,
         "session_type": session.session_type,
         "predicted_session_type": predicted,
         "effective_session_type": effective,
@@ -159,6 +160,7 @@ def _serialize_merge_alias_metadata(alias: RunSessionMergeAlias) -> dict:
     return {
         "start_time": alias.source_start_time.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
         "merged_into_start_time": alias.target_start_time.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "avg_hr": None,
         "session_type": None,
         "predicted_session_type": None,
         "effective_session_type": None,

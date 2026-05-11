@@ -49,11 +49,7 @@ enum APIConfig {
             return configured
         }
 
-        #if DEBUG
-        return "http://MacBook-Pro-de-Albane.local:8000"
-        #else
         return "https://healthcoach-api.onrender.com"
-        #endif
     }()
 
     static let importToken: String? = plistValue("HEALTHCOACH_IMPORT_TOKEN")

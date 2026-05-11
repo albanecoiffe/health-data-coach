@@ -104,7 +104,9 @@ final class HealthManager: ObservableObject {
                 durationMin: session.durationMin,
                 elevationGainM: session.elevationGainM,
                 dayLabel: session.dayLabel,
-                averageHeartRate: session.averageHeartRate,
+                averageHeartRate: session.averageHeartRate > 0
+                    ? session.averageHeartRate
+                    : (metadata.avg_hr ?? 0),
                 z1: session.z1,
                 z2: session.z2,
                 z3: session.z3,
