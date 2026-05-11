@@ -52,7 +52,7 @@ Configuration actuelle :
 ```swift
 enum APIConfig {
     static let baseURL: String = {
-        return "https://healthcoach-api.onrender.com"
+        return "https://healthcoach-api-ri82.onrender.com"
     }()
 }
 ```

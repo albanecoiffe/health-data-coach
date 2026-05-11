@@ -50,7 +50,7 @@ final class RunSessionSyncService {
 
     let baseURL: String
     let userId: String
-    private let hostedFallbackBaseURL = "https://healthcoach-api.onrender.com"
+    private let hostedFallbackBaseURL = "https://healthcoach-api-ri82.onrender.com"
 
     init(baseURL: String, userId: String) {
         self.baseURL = baseURL

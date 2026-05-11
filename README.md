@@ -165,7 +165,7 @@ Configuration actuelle :
 ```swift
 enum APIConfig {
     // Debug: http://MacBook-Pro-de-Albane.local:8000
-    // Release: https://healthcoach-api.onrender.com
+    // Release: https://healthcoach-api-ri82.onrender.com
 }
 ```
 

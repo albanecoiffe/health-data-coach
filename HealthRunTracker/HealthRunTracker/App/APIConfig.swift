@@ -49,7 +49,7 @@ enum APIConfig {
             return configured
         }
 
-        return "https://healthcoach-api.onrender.com"
+        return "https://healthcoach-api-ri82.onrender.com"
     }()
 
     static let importToken: String? = plistValue("HEALTHCOACH_IMPORT_TOKEN")

@@ -74,7 +74,7 @@ HealthRunTracker/HealthRunTracker/App/APIConfig.swift
 ```
 
 En Debug, l'app retombe automatiquement sur `http://MacBook-Pro-de-Albane.local:8000`.
-En Release, elle retombe sur l'URL Render `https://healthcoach-api.onrender.com`, sauf si une valeur `HEALTHCOACH_API_BASE_URL` est fournie dans les build settings.
+En Release, elle retombe sur l'URL Render `https://healthcoach-api-ri82.onrender.com`, sauf si une valeur `HEALTHCOACH_API_BASE_URL` est fournie dans les build settings.
 
 ## Deployer sur Render
 
@@ -114,7 +114,7 @@ DEFAULT_USER_ID=
 Une fois le service cree, verifier :
 
 ```bash
-curl https://healthcoach-api.onrender.com/health/db
+curl https://healthcoach-api-ri82.onrender.com/health/db
 ```
 
 Si le nom Render choisi est different, mettre cette URL dans le build setting iOS `HEALTHCOACH_API_BASE_URL` ou ajuster le fallback Release dans `APIConfig.swift`.
