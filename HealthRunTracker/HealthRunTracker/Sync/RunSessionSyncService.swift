@@ -346,6 +346,11 @@ final class RunSessionSyncService {
                     return
                 }
 
+                if http.statusCode == 404 {
+                    completion(.success([]))
+                    return
+                }
+
                 guard 200..<300 ~= http.statusCode else {
                     completion(.failure(NSError(domain: "sync", code: http.statusCode)))
                     return
