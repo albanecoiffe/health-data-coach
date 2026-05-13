@@ -85,7 +85,7 @@ final class RunSessionSyncService {
     private func performDataRequest(
         using requestBaseURL: String,
         allowsRetry: Bool,
-        buildRequest: (String) -> URLRequest?,
+        buildRequest: @escaping (String) -> URLRequest?,
         completion: @escaping (Result<(Data?, HTTPURLResponse), Error>) -> Void
     ) {
         guard let request = buildRequest(requestBaseURL) else {
